@@ -12,6 +12,8 @@ set(SOURCES
     Source/Block.cpp
     Source/BlockRegistry.h
     Source/BlockRegistry.cpp
+    Source/Chunk.h
+    Source/Chunk.cpp
     Source/Perlin.h
     Source/Perlin.cpp
 )

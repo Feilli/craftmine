@@ -18,7 +18,7 @@ public:
     ~Block();
 
     void Update(float deltaTime);
-    void Render();
+    void Render() const;
 
     void SetPosition(glm::vec3 position);
 

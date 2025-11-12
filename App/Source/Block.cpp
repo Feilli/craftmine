@@ -15,7 +15,7 @@ void Block::Update(float deltaTime) {
 
 }
 
-void Block::Render() {
+void Block::Render() const {
 
 }
 

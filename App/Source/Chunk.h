@@ -1,23 +1,27 @@
 #pragma once
 
-#include "Block.h"
+#include "BlockRegistry.h"
+
+#include "Core/Renderer/Shader.h"
 
 #include <vector>
 #include <memory>
 
 class Chunk {
 public:
-    Chunk();
+    Chunk(int size, glm::ivec2 coordinate);
     ~Chunk();
 
     void Update(float deltaTime);
-    void Render();
+    void Render(std::shared_ptr<Renderer::Shader> shader, std::shared_ptr<BlockRegistry> blockRegistry);
 
-    void Generate(glm::vec2 offset);
+    void Generate();
 
 private:
-    size_t m_Size = 16;
-    size_t m_Height = 256;
+    glm::ivec2 m_Coordinate;
 
-    std::vector<std::unique_ptr<Block>> m_Blocks;
+    int m_Size = 16;
+    int m_Height = 256;
+
+    std::vector<Block> m_Blocks;
 };

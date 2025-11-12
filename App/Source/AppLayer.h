@@ -9,6 +9,7 @@
 #include "Camera.h"
 #include "Block.h"
 #include "BlockRegistry.h"
+#include "Chunk.h"
 
 #include <glm/glm.hpp>
 
@@ -76,7 +77,24 @@ private:
     */
 
     int m_ChunkSize = 16;
-    std::vector<Block> m_Blocks;
+    int m_ViewDistance = 2;
+
+    glm::ivec2 WorldToChunkCoordinate(const glm::vec3& position);
+
+    struct ivec2_hash {
+        std::size_t operator()(const glm::ivec2& v) const noexcept {
+            // Convert to 64-bit to avoid overflow
+            uint64_t x = static_cast<uint32_t>(v.x);
+            uint64_t y = static_cast<uint32_t>(v.y);
+
+            uint64_t hash = x * 73856093ull ^y * 73856093ull;
+            return std::hash<uint64_t>()(hash);
+        }
+    };
+
+    std::unordered_map<glm::ivec2, std::shared_ptr<Chunk>, ivec2_hash> m_ChunkMap;
+
+    // std::vector<Block> m_Blocks;
 
     Camera m_Camera;
     // this can be a feature of the camera (like cast ray from camera)

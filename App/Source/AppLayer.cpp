@@ -48,20 +48,34 @@ AppLayer::AppLayer() {
     // }
 
     // init blocks
-    m_Blocks.reserve(m_ChunkSize * m_ChunkSize * m_ChunkSize);
+    // m_Blocks.reserve(m_ChunkSize * m_ChunkSize * m_ChunkSize);
 
-    // create an engine
-    std::default_random_engine engine(std::random_device{}());
-    std::uniform_int<> uniformInt(0, 2);
+    // // create an engine
+    // std::default_random_engine engine(std::random_device{}());
+    // std::uniform_int<> uniformInt(0, 2);
 
-    for(int i = 0; i < m_ChunkSize * m_ChunkSize; i++) {
-        float x = i % m_ChunkSize;
-        float z = std::floor(i / m_ChunkSize);
+    // for(int i = 0; i < m_ChunkSize * m_ChunkSize; i++) {
+    //     float x = i % m_ChunkSize;
+    //     float z = std::floor(i / m_ChunkSize);
         
-        m_Blocks.emplace_back();
+    //     m_Blocks.emplace_back();
 
-        m_Blocks[i].m_Material = static_cast<BlockMaterial>(uniformInt(engine));
-        m_Blocks[i].SetPosition(glm::vec3(x, 0.0f, z));
+    //     m_Blocks[i].m_Material = static_cast<BlockMaterial>(uniformInt(engine));
+    //     m_Blocks[i].SetPosition(glm::vec3(x, 0.0f, z));
+    // }
+
+    // create chunks
+    glm::ivec2 cameraChunk = AppLayer::WorldToChunkCoordinate(m_Camera.GetPosition());
+
+    for(int x = -m_ViewDistance; x <= m_ViewDistance; x++) {
+        for(int y = -m_ViewDistance; y <= m_ViewDistance; y++) {
+            glm::ivec2 chunkCoordinate = cameraChunk + glm::ivec2(x, y);
+
+            if(!m_ChunkMap.contains(chunkCoordinate)) {
+                m_ChunkMap[chunkCoordinate] = std::make_shared<Chunk>(m_ChunkSize, chunkCoordinate);
+                m_ChunkMap[chunkCoordinate]->Generate();
+            }
+        }
     }
 
     // load shaders
@@ -126,6 +140,10 @@ AppLayer::AppLayer() {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // enable culling
+    // glEnable(GL_CULL_FACE);
+    // glCullFace(GL_BACK);
+
+    // glFrontFace(GL_CCW);
 
     // subscribe for mouse and keyboard events
     // I think there is a smarter way to sub for those events
@@ -148,29 +166,31 @@ AppLayer::~AppLayer() {
 
 void AppLayer::OnUpdate(float deltaTime) {
     // hightlist cube
-    float closestDistance = 16.0f; // maximum distance from which we pick up an object
-    int hightlighedCube = -1;
+    // float closestDistance = 16.0f; // maximum distance from which we pick up an object
+    // int hightlighedCube = -1;
 
-    for(size_t i = 0; i < m_Blocks.size(); i++) {
-        // reset highlight
-        m_Blocks[i].m_Selected = false;
+    // for(size_t i = 0; i < m_Blocks.size(); i++) {
+    //     // reset highlight
+    //     m_Blocks[i].m_Selected = false;
 
-        // check if our awesome camera points on the block
-        glm::vec3 minBound = m_Blocks[i].GetPosition() - glm::vec3(0.5f);
-        glm::vec3 maxBound = m_Blocks[i].GetPosition() + glm::vec3(0.5f);
+    //     // check if our awesome camera points on the block
+    //     glm::vec3 minBound = m_Blocks[i].GetPosition() - glm::vec3(0.5f);
+    //     glm::vec3 maxBound = m_Blocks[i].GetPosition() + glm::vec3(0.5f);
 
-        float distance;
-        bool highlight = RayIntersectsAABB(m_Camera.GetPosition(), m_CameraRay, minBound, maxBound, distance);
+    //     float distance;
+    //     bool highlight = RayIntersectsAABB(m_Camera.GetPosition(), m_CameraRay, minBound, maxBound, distance);
 
-        if(highlight && distance < closestDistance) {
-            closestDistance = distance;
-            hightlighedCube = i;
-        }
-    }
+    //     if(highlight && distance < closestDistance) {
+    //         closestDistance = distance;
+    //         hightlighedCube = i;
+    //     }
+    // }
 
-    if(hightlighedCube >= 0) {
-        m_Blocks[hightlighedCube].m_Selected = true;
-    }
+    // if(hightlighedCube >= 0) {
+    //     m_Blocks[hightlighedCube].m_Selected = true;
+    // }
+
+
 
     UpdateCameraRay();
 
@@ -193,16 +213,20 @@ void AppLayer::OnRender() {
     // bind texture
     m_TextureAtlas->GetTexture()->Bind();
     
-    for(size_t i = 0; i < m_Blocks.size(); i++) {
-        // bind uniforms
-        m_Shader->SetMat4("u_Model", m_Blocks[i].GetModelMatrix());
-        m_Shader->SetBool("u_Highlight", m_Blocks[i].m_Selected);
-
-        auto mesh = m_BlockRegistry.Get(m_Blocks[i].m_Material).Mesh;
-        mesh->Bind();
-
-        glDrawElements(GL_TRIANGLES, mesh->GetIndexCount(), GL_UNSIGNED_INT, 0);
+    for(auto chunk : m_ChunkMap) {
+        chunk.second->Render(m_Shader, std::make_shared<BlockRegistry>(m_BlockRegistry));
     }
+
+    // for(size_t i = 0; i < m_Blocks.size(); i++) {
+    //     // bind uniforms
+    //     m_Shader->SetMat4("u_Model", m_Blocks[i].GetModelMatrix());
+    //     m_Shader->SetBool("u_Highlight", m_Blocks[i].m_Selected);
+
+    //     auto mesh = m_BlockRegistry.Get(m_Blocks[i].m_Material).Mesh;
+    //     mesh->Bind();
+
+    //     glDrawElements(GL_TRIANGLES, mesh->GetIndexCount(), GL_UNSIGNED_INT, 0);
+    // }
 }
 
 void AppLayer::UpdateCameraRay() {
@@ -357,39 +381,39 @@ void AppLayer::OnKeyEventHandler(const Core::Event& event) {
 }
 
 int AppLayer::GetSelectedBlockIndex() {
-    for(size_t i = 0; i < m_Blocks.size(); i++) {
-        if(m_Blocks[i].m_Selected) {
-            return (int)i;
-        }
-    }
+    // for(size_t i = 0; i < m_Blocks.size(); i++) {
+    //     if(m_Blocks[i].m_Selected) {
+    //         return (int)i;
+    //     }
+    // }
 
     return -1;
 }
 
 void AppLayer::OnMouseButtonEventHandler(const Core::Event& event) {
-    if(event.Type == Core::EventType::MouseButtonReleased && event.Key == GLFW_MOUSE_BUTTON_LEFT) {
-        int selectedBlockIndex = GetSelectedBlockIndex();
+    // if(event.Type == Core::EventType::MouseButtonReleased && event.Key == GLFW_MOUSE_BUTTON_LEFT) {
+    //     int selectedBlockIndex = GetSelectedBlockIndex();
 
-        if(selectedBlockIndex >= 0) {
-            FaceHit faceHit;
-            bool isFaceHit = RayIntersectsFace(m_Camera.GetPosition(), m_CameraRay, m_Blocks[selectedBlockIndex].GetModelMatrix(), faceHit);
+    //     if(selectedBlockIndex >= 0) {
+    //         FaceHit faceHit;
+    //         bool isFaceHit = RayIntersectsFace(m_Camera.GetPosition(), m_CameraRay, m_Blocks[selectedBlockIndex].GetModelMatrix(), faceHit);
 
-            if(isFaceHit) {
-                Block newBlock;
-                newBlock.SetPosition(m_Blocks[selectedBlockIndex].GetPosition() + faceHit.Normal);
+    //         if(isFaceHit) {
+    //             Block newBlock;
+    //             newBlock.SetPosition(m_Blocks[selectedBlockIndex].GetPosition() + faceHit.Normal);
 
-                m_Blocks.push_back(newBlock);
-            }
-        }
-    }
+    //             m_Blocks.push_back(newBlock);
+    //         }
+    //     }
+    // }
 
-    if(event.Type == Core::EventType::MouseButtonReleased && event.Key == GLFW_MOUSE_BUTTON_RIGHT) {
-        int selectedBlockIndex = GetSelectedBlockIndex();
+    // if(event.Type == Core::EventType::MouseButtonReleased && event.Key == GLFW_MOUSE_BUTTON_RIGHT) {
+    //     int selectedBlockIndex = GetSelectedBlockIndex();
 
-        if(selectedBlockIndex >= 0) {
-            m_Blocks.erase(m_Blocks.begin() + selectedBlockIndex);
-        }
-    }
+    //     if(selectedBlockIndex >= 0) {
+    //         m_Blocks.erase(m_Blocks.begin() + selectedBlockIndex);
+    //     }
+    // }
 }
 
 std::shared_ptr<Renderer::Mesh> AppLayer::CreateBlockMesh(std::unordered_map<BlockFace, Renderer::UVRect>& uvMap) {
@@ -486,4 +510,11 @@ std::shared_ptr<Renderer::Mesh> AppLayer::CreateBlockMesh(std::unordered_map<Blo
 
     // load mesh
     return std::make_shared<Renderer::Mesh>(vertices, uvs, indices);
+}
+
+glm::ivec2 AppLayer::WorldToChunkCoordinate(const glm::vec3& position) {
+    return glm::ivec2(
+        std::floor(position.x / m_ChunkSize),
+        std::floor(position.z / m_ChunkSize)
+    );
 }
