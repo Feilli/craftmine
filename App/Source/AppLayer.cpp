@@ -5,6 +5,7 @@
 #include "Core/Application.h"
 
 #include "glm/gtc/matrix_transform.hpp"
+#include "glm/gtc/matrix_access.hpp"
 #include "glm/gtc/type_ptr.hpp"
 
 #include <print>
@@ -65,18 +66,7 @@ AppLayer::AppLayer() {
     // }
 
     // create chunks
-    glm::ivec2 cameraChunk = AppLayer::WorldToChunkCoordinate(m_Camera.GetPosition());
-
-    for(int x = -m_ViewDistance; x <= m_ViewDistance; x++) {
-        for(int y = -m_ViewDistance; y <= m_ViewDistance; y++) {
-            glm::ivec2 chunkCoordinate = cameraChunk + glm::ivec2(x, y);
-
-            if(!m_ChunkMap.contains(chunkCoordinate)) {
-                m_ChunkMap[chunkCoordinate] = std::make_shared<Chunk>(m_ChunkSize, chunkCoordinate);
-                m_ChunkMap[chunkCoordinate]->Generate();
-            }
-        }
-    }
+    
 
     // load shaders
     m_Shader = std::make_shared<Renderer::Shader>("Shaders/Vertex.glsl", "Shaders/Fragment.glsl");
@@ -140,10 +130,10 @@ AppLayer::AppLayer() {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // enable culling
-    // glEnable(GL_CULL_FACE);
-    // glCullFace(GL_BACK);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
 
-    // glFrontFace(GL_CCW);
+    glFrontFace(GL_CCW);
 
     // subscribe for mouse and keyboard events
     // I think there is a smarter way to sub for those events
@@ -165,6 +155,50 @@ AppLayer::~AppLayer() {
 }
 
 void AppLayer::OnUpdate(float deltaTime) {
+    // mark chunks for removal
+    for(const auto& chunk: m_ChunkMap) {
+        chunk.second->ToRemove = true;
+    }
+
+    // generate chunks
+    glm::ivec2 cameraChunk = AppLayer::WorldToChunkCoordinate(m_Camera.GetPosition());
+
+    for(int x = -m_ViewDistance; x <= m_ViewDistance; x++) {
+        for(int y = -m_ViewDistance; y <= m_ViewDistance; y++) {
+            glm::ivec2 chunkCoordinate = cameraChunk + glm::ivec2(x, y);
+
+            if(!m_ChunkMap.contains(chunkCoordinate)) {
+                m_ChunkMap[chunkCoordinate] = std::make_shared<Chunk>(m_ChunkSize, chunkCoordinate);
+                m_ChunkMap[chunkCoordinate]->Generate();
+            } else {
+                m_ChunkMap[chunkCoordinate]->ToRemove = false;
+            }
+        }
+    }
+
+    // remove chunks marked for removal
+    for(const auto& chunk : m_ChunkMap) {
+        if(chunk.second->ToRemove) {
+            m_ChunkMap.erase(chunk.first);
+        }
+    }
+
+    // set chunk visibility
+    Frustum cameraFrustum = GetFrustum(m_Camera.GetViewProjectionMatrix());
+
+    for(const auto& chunk : m_ChunkMap) {
+        AABB box = { 
+            { chunk.first.x * m_ChunkSize, 0.0f, chunk.first.y * m_ChunkSize },
+            { chunk.first.x * m_ChunkSize + m_ChunkSize, 256.0f, chunk.first.y * m_ChunkSize + m_ChunkSize }
+        };
+
+        if(AABBInFrustum(cameraFrustum, box)) {
+            chunk.second->SetVisible(true);
+        } else {
+            chunk.second->SetVisible(false);
+        }
+    }
+
     // hightlist cube
     // float closestDistance = 16.0f; // maximum distance from which we pick up an object
     // int hightlighedCube = -1;
@@ -190,8 +224,6 @@ void AppLayer::OnUpdate(float deltaTime) {
     //     m_Blocks[hightlighedCube].m_Selected = true;
     // }
 
-
-
     UpdateCameraRay();
 
     // update camera
@@ -200,7 +232,7 @@ void AppLayer::OnUpdate(float deltaTime) {
 
 void AppLayer::OnRender() {
     // rendering commands
-    glClearColor(0.1f, 0.1f, 0.1f, 1.1f);   
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);   
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // render cube
@@ -227,6 +259,55 @@ void AppLayer::OnRender() {
 
     //     glDrawElements(GL_TRIANGLES, mesh->GetIndexCount(), GL_UNSIGNED_INT, 0);
     // }
+}
+
+AppLayer::Frustum AppLayer::GetFrustum(const glm::mat4 viewProjectionMatrix) {
+    Frustum f;
+
+    glm::vec4 rowX = glm::row(viewProjectionMatrix, 0);
+    glm::vec4 rowY = glm::row(viewProjectionMatrix, 1);
+    glm::vec4 rowZ = glm::row(viewProjectionMatrix, 2);
+    glm::vec4 rowW = glm::row(viewProjectionMatrix, 3);
+
+    glm::vec4 planes[6] = {
+        rowW + rowX, // left
+        rowW - rowX, // right
+        rowW + rowY, // bottom
+        rowW - rowY, // top
+        rowW + rowZ, // near
+        rowW - rowZ // far
+    };
+
+    for(int i = 0; i < 6; i++) {
+        glm::vec3 normal = glm::vec3(planes[i]);
+        float d = planes[i].w;
+
+        float len = glm::length(normal);
+        f.planes[i].normal = normal / len;
+        f.planes[i].d      = d / len;
+    }
+
+    return f;
+}
+
+bool AppLayer::AABBInFrustum(const Frustum& frustum, const AABB& box) {
+    for(int i = 0; i < 6; i++) {
+        const Plane& p = frustum.planes[i];
+
+        glm::vec3 positive;
+
+        positive.x = (p.normal.x >= 0) ? box.maxBound.x : box.minBound.x;
+        positive.y = (p.normal.y >= 0) ? box.maxBound.y : box.minBound.y;
+        positive.z = (p.normal.z >= 0) ? box.maxBound.z : box.minBound.z;
+
+        float distance = glm::dot(p.normal, positive) + p.d;
+
+        if(distance < 0) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 void AppLayer::UpdateCameraRay() {
@@ -425,10 +506,10 @@ std::shared_ptr<Renderer::Mesh> AppLayer::CreateBlockMesh(std::unordered_map<Blo
         { -0.5f,  0.5f,  0.5f },
 
         // back face
-        { -0.5f, -0.5f, -0.5f },
         {  0.5f, -0.5f, -0.5f },
-        {  0.5f,  0.5f, -0.5f },
+        { -0.5f, -0.5f, -0.5f },
         { -0.5f,  0.5f, -0.5f },
+        {  0.5f,  0.5f, -0.5f },
 
         // left face
         { -0.5f, -0.5f, -0.5f },
@@ -437,10 +518,10 @@ std::shared_ptr<Renderer::Mesh> AppLayer::CreateBlockMesh(std::unordered_map<Blo
         { -0.5f,  0.5f, -0.5f },
         
         // right face
-        {  0.5f, -0.5f, -0.5f },
         {  0.5f, -0.5f,  0.5f },
-        {  0.5f,  0.5f,  0.5f },
+        {  0.5f, -0.5f, -0.5f },
         {  0.5f,  0.5f, -0.5f },
+        {  0.5f,  0.5f,  0.5f },
 
         // top face
         { -0.5f,  0.5f,  0.5f },
@@ -449,10 +530,10 @@ std::shared_ptr<Renderer::Mesh> AppLayer::CreateBlockMesh(std::unordered_map<Blo
         { -0.5f,  0.5f, -0.5f },
 
         // bottom face
-        { -0.5f, -0.5f,  0.5f },
-        {  0.5f, -0.5f,  0.5f },
+        { -0.5f, -0.5f, -0.5f },
         {  0.5f, -0.5f, -0.5f },
-        { -0.5f, -0.5f, -0.5f }
+        {  0.5f, -0.5f,  0.5f },
+        { -0.5f, -0.5f,  0.5f }
     };
 
     const std::vector<unsigned int> indices = {
@@ -472,28 +553,28 @@ std::shared_ptr<Renderer::Mesh> AppLayer::CreateBlockMesh(std::unordered_map<Blo
 
     const std::vector<glm::vec2> uvs = {
         // front face
-        { uvMap[BlockFace::FRONT].UMax, uvMap[BlockFace::FRONT].VMax },
-        { uvMap[BlockFace::FRONT].UMin, uvMap[BlockFace::FRONT].VMax },
         { uvMap[BlockFace::FRONT].UMin, uvMap[BlockFace::FRONT].VMin },
         { uvMap[BlockFace::FRONT].UMax, uvMap[BlockFace::FRONT].VMin },
+        { uvMap[BlockFace::FRONT].UMax, uvMap[BlockFace::FRONT].VMax },
+        { uvMap[BlockFace::FRONT].UMin, uvMap[BlockFace::FRONT].VMax },
 
         // back face
-        { uvMap[BlockFace::BACK].UMin, uvMap[BlockFace::BACK].VMax },
-        { uvMap[BlockFace::BACK].UMax, uvMap[BlockFace::BACK].VMax },
-        { uvMap[BlockFace::BACK].UMax, uvMap[BlockFace::BACK].VMin },
         { uvMap[BlockFace::BACK].UMin, uvMap[BlockFace::BACK].VMin },
+        { uvMap[BlockFace::BACK].UMax, uvMap[BlockFace::BACK].VMin },
+        { uvMap[BlockFace::BACK].UMax, uvMap[BlockFace::BACK].VMax },
+        { uvMap[BlockFace::BACK].UMin, uvMap[BlockFace::BACK].VMax },
 
         // left face
-        { uvMap[BlockFace::LEFT].UMax, uvMap[BlockFace::LEFT].VMax },
-        { uvMap[BlockFace::LEFT].UMin, uvMap[BlockFace::LEFT].VMax },
         { uvMap[BlockFace::LEFT].UMin, uvMap[BlockFace::LEFT].VMin },
         { uvMap[BlockFace::LEFT].UMax, uvMap[BlockFace::LEFT].VMin },
+        { uvMap[BlockFace::LEFT].UMax, uvMap[BlockFace::LEFT].VMax },
+        { uvMap[BlockFace::LEFT].UMin, uvMap[BlockFace::LEFT].VMax },
         
         // right face
-        { uvMap[BlockFace::RIGHT].UMin, uvMap[BlockFace::RIGHT].VMax },
-        { uvMap[BlockFace::RIGHT].UMax, uvMap[BlockFace::RIGHT].VMax },
-        { uvMap[BlockFace::RIGHT].UMax, uvMap[BlockFace::RIGHT].VMin },
         { uvMap[BlockFace::RIGHT].UMin, uvMap[BlockFace::RIGHT].VMin },
+        { uvMap[BlockFace::RIGHT].UMax, uvMap[BlockFace::RIGHT].VMin },
+        { uvMap[BlockFace::RIGHT].UMax, uvMap[BlockFace::RIGHT].VMax },
+        { uvMap[BlockFace::RIGHT].UMin, uvMap[BlockFace::RIGHT].VMax },
 
         // top face
         { uvMap[BlockFace::TOP].UMin, uvMap[BlockFace::TOP].VMin },

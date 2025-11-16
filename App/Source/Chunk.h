@@ -17,11 +17,17 @@ public:
 
     void Generate();
 
+    void SetVisible(bool visible);
+
+    bool ToRemove = false;
+
 private:
     glm::ivec2 m_Coordinate;
 
     int m_Size = 16;
     int m_Height = 256;
+
+    bool m_Visible = false;
 
     std::vector<Block> m_Blocks;
 };

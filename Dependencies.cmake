@@ -54,3 +54,19 @@ if (NOT glm_FOUND)
     endif()
 endif()
 set_target_properties(glm PROPERTIES FOLDER "Dependencies")
+
+# FreeType
+find_package(freetype 2.14.1 QUIET)
+if(NOT freetype_FOUND)
+    FetchContent_Declare(
+        Freetype
+        DOWNLOAD_EXTRACT_TIMESTAMP OFF
+        URL https://gitlab.freedesktop.org/freetype/freetype/-/archive/VER-2-14-1/freetype-VER-2-14-1.zip
+    )
+    FetchContent_GetProperties(freetype)
+    if(NOT freetype_POPULATED)
+        set(FETCHCONTENT_QUIET NO)
+        FetchContent_Populate(freetype)
+        add_subdirectory(${freetype_SOURCE_DIR} ${freetype_BINARY_DIR})
+    endif()
+endif()

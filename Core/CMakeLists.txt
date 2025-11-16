@@ -18,6 +18,10 @@ set(SOURCES
     Source/Core/Renderer/Shader.cpp
     Source/Core/Renderer/Mesh.h
     Source/Core/Renderer/Mesh.cpp
+    Source/Core/Renderer/Font.h
+    Source/Core/Renderer/Font.cpp
+    Source/Core/Renderer/Quad.h
+    Source/Core/Renderer/Quad.cpp
 )
 
 add_library(Core STATIC)
@@ -34,5 +38,6 @@ add_compile_definitions(
 target_link_libraries(Core glfw)
 target_link_libraries(Core glad)
 target_link_libraries(Core glm)
+target_link_libraries(Core freetype)
 
 target_include_directories(Core PUBLIC "Source" "Vendor/stb")

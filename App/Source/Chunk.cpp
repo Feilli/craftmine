@@ -16,6 +16,10 @@ void Chunk::Update(float deltaTime) {
 }
 
 void Chunk::Render(std::shared_ptr<Renderer::Shader> shader, std::shared_ptr<BlockRegistry> blockRegistry) {
+    if(!m_Visible) {
+        return;
+    }
+
     for(size_t i = 0; i < m_Blocks.size(); i++) {
         // bind uniforms
         shader->SetMat4("u_Model", m_Blocks[i].GetModelMatrix());
@@ -36,4 +40,8 @@ void Chunk::Generate() {
         m_Blocks.emplace_back();
         m_Blocks[i].SetPosition(glm::vec3(x + m_Coordinate.x * m_Size, 0.0f, z + m_Coordinate.y * m_Size));
     }
+}
+
+void Chunk::SetVisible(bool visible) {
+    m_Visible = visible;
 }

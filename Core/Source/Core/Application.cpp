@@ -40,6 +40,9 @@ namespace Core {
         glfwSetKeyCallback(m_Window->GetHandle(), OnSetKeyCallback);
         glfwSetMouseButtonCallback(m_Window->GetHandle(), OnSetMouseButtonCallback);
 
+        int tickCount = 0;
+        float tickTime = 0;
+
         while(m_Running) {
             glfwPollEvents();
 
@@ -64,6 +67,16 @@ namespace Core {
                 layer->OnRender();
 
             m_Window->Update();
+
+            tickCount += 1;
+            tickTime += deltaTime;
+
+            if(tickTime > 1.0f) {
+                m_TickCount = tickCount;
+
+                tickCount = 0;
+                tickTime = 0;
+            }
         }
     }
 
@@ -85,6 +98,10 @@ namespace Core {
 
     glm::vec2 Application::GetFrameBufferSize() const {
         return m_Window->GetFrameBufferSize();
+    }
+
+    int Application::GetTickCount() const {
+        return m_TickCount;
     }
 
     Application& Application::Get() {

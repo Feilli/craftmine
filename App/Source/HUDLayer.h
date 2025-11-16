@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Core/Layer.h"
+#include "Core/Renderer/Quad.h"
+#include "Core/Renderer/Font.h"
 
 #include <glm/glm.hpp>
 
@@ -11,20 +13,10 @@ public:
     HUDLayer();
     virtual ~HUDLayer();
 
-    struct Vertex {
-        glm::vec3 Position;
-        glm::vec2 TexCoord;
-    };
-
     virtual void OnUpdate(float deltaTime) override;
     virtual void OnRender() override;
     
 private:
-    uint32_t m_VertexArray = 0;
-    uint32_t m_VertexBuffer = 0;
-    uint32_t m_ElementBuffer = 0;
-    uint32_t m_UniformBuffer = 0;
-    uint32_t m_Shader = 0;
-
-    uint32_t m_Texture = 0;
+    Renderer::Quad m_Crosshair;
+    Renderer::Font m_Font;
 };

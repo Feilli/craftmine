@@ -32,6 +32,7 @@ add_compile_definitions(
 target_link_libraries(App glfw)
 target_link_libraries(App glad)
 target_link_libraries(App glm)
+target_link_libraries(App freetype)
 
 target_link_libraries(App Core)
 

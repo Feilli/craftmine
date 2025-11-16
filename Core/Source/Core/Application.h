@@ -34,6 +34,7 @@ namespace Core {
 
         glm::vec2 GetCursorPos() const;
         glm::vec2 GetFrameBufferSize() const;
+        int GetTickCount() const;
 
         static Application& Get();
         static float GetTime();
@@ -47,8 +48,10 @@ namespace Core {
         std::shared_ptr<EventDispatcher> m_EventDispatcher;
 
         bool m_Running = false;
+        int m_TickCount = 0;
 
         std::vector<std::unique_ptr<Layer>> m_LayerStack;
+
     };
 
 }

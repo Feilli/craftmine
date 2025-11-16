@@ -38,7 +38,22 @@ public:
         float v1 = 0.0f;
     };
 
-    UVRect GetTileUV(int x, int y);
+    struct AABB {
+        glm::vec3 minBound;
+        glm::vec3 maxBound;
+    };
+
+    struct Plane {
+        glm::vec3 normal;
+        float d;
+    };
+
+    struct Frustum {
+        Plane planes[6];
+    };
+
+    Frustum GetFrustum(const glm::mat4 viewProjectionMatrix);
+    bool AABBInFrustum(const Frustum& frustum, const AABB& box);
 
     void UpdateCameraRay();
 
@@ -77,7 +92,7 @@ private:
     */
 
     int m_ChunkSize = 16;
-    int m_ViewDistance = 2;
+    int m_ViewDistance = 8;
 
     glm::ivec2 WorldToChunkCoordinate(const glm::vec3& position);
 
