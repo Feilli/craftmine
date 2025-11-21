@@ -1,5 +1,7 @@
 #pragma once
 
+#include <glm/glm.hpp>
+
 #include <queue>
 #include <functional>
 #include <vector>
@@ -10,13 +12,18 @@ namespace Core {
         KeyPressed,
         KeyReleased,
         MouseButtonPressed,
-        MouseButtonReleased
+        MouseButtonReleased,
+
+        // HUD Events
+        PositionUpdated,
+        BlockHitUpdated
     };
 
     struct Event {
         EventType Type = EventType::KeyPressed;
         int Key = -1;
         int Mods = -1;
+        glm::vec3 Position = glm::vec3(1.0f);
     };
 
     class EventDispatcher {

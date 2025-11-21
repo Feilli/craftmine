@@ -10,10 +10,12 @@ public:
     void Update(float deltaTime);
     void UpdatePosition(float deltaTime);
 
-    glm::vec3 GetPosition();
-    glm::mat4 GetViewProjectionMatrix();
-    glm::mat4 GetViewMatrix();
-    glm::mat4 GetProjectionMatrix();
+    glm::vec3 GetPosition() const;
+    glm::mat4 GetViewProjectionMatrix() const;
+    glm::mat4 GetViewMatrix() const;
+    glm::mat4 GetProjectionMatrix() const;
+
+    glm::vec3 CastRay();
 
 private:
     glm::vec3 m_Position = glm::vec3(0.0f, 3.0f, -3.0f);
@@ -30,6 +32,6 @@ private:
     glm::vec3 m_Right = glm::vec3(1.0f, 0.0f, 0.0f);
     glm::vec3 m_WorldUp = glm::vec3(0.0f, 1.0f, 0.0f);
 
-    float m_Speed = 8.0f;
+    float m_Speed = 12.0f;
     float m_MouseSensitivity = 0.1f;
 };

@@ -13,17 +13,24 @@ namespace Renderer {
 
     }
 
-    UVRect TextureAtlas::GetTileUV(int x, int y) {
+    std::vector<glm::vec2> TextureAtlas::GetTileUV(int x, int y) const {
         float tileW = 1.0f / m_Width;
         float tileH = 1.0f / m_Height;
 
-        UVRect rect;
-        rect.UMin = x * tileW;
-        rect.VMin = y * tileH;
-        rect.UMax = rect.UMin + tileW;
-        rect.VMax = rect.VMin + tileH;
+        // UVRect rect;
+        float UMin = x * tileW;
+        float VMin = y * tileH;
+        float UMax = UMin + tileW;
+        float VMax = VMin + tileH;
 
-        return rect;
+        std::vector<glm::vec2> uvs = {
+            { UMin, VMin },
+            { UMax, VMin },
+            { UMax, VMax },
+            { UMin, VMax },
+        };
+
+        return uvs;
     }
 
     std::shared_ptr<Texture> TextureAtlas::GetTexture() {

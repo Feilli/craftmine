@@ -6,7 +6,7 @@ namespace Renderer {
 
     struct Vertex {
         glm::vec3 Position;
-        glm::vec2 TexCoord;
+        glm::vec2 UVs;
     };
 
 }

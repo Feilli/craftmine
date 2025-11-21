@@ -22,13 +22,25 @@ HUDLayer::HUDLayer() :
     m_Crosshair.SetTexture(crosshairTexture);
 
     m_Crosshair.SetScale(glm::vec3(0.1f, 0.1f, 0.0f));
+
+    Core::Application::Get().GetEventDispatcher()->AddListener([this](const Core::Event& event) {
+        switch(event.Type) {
+            case Core::EventType::PositionUpdated:
+                this->OnPositionUpdatedEvent(event.Position);
+                break;
+            case Core::EventType::BlockHitUpdated:
+                this->OnBlockHitUpdatedEvent(event.Position);
+                break;
+        }
+    });
 }
 
 HUDLayer::~HUDLayer() {
 }
 
 void HUDLayer::OnUpdate(float deltaTime) {
-    
+    // update debug info
+    m_DebugInfo.FPS = Core::Application::Get().GetTickCount();
 }
 
 void HUDLayer::OnRender() {
@@ -42,6 +54,20 @@ void HUDLayer::OnRender() {
     m_Crosshair.Render(projection);
     
     // Render Debug Info
-    std::string fps = std::format("FPS: {}", Core::Application::Get().GetTickCount());
+    std::string fps = std::format("FPS: {}", m_DebugInfo.FPS);
     m_Font.RenderText(projection, fps, glm::vec2(-1.5f - 0.25f, 1.0f - 0.07f));
+
+    std::string position = std::format("x: {:10f}, y: {:10f}, z: {:10f}", m_DebugInfo.Position.x, m_DebugInfo.Position.y, m_DebugInfo.Position.z);
+    m_Font.RenderText(projection, position, glm::vec2(-1.5f - 0.25f, 1.0f - 0.14f));
+
+    std::string blockHit = std::format("x: {:10f}, y: {:10f}, z: {:10f}", m_DebugInfo.BlockHit.x, m_DebugInfo.BlockHit.y, m_DebugInfo.BlockHit.z);
+    m_Font.RenderText(projection, blockHit, glm::vec2(-1.5f - 0.25f, 1.0f - 0.21f));
+}
+
+void HUDLayer::OnPositionUpdatedEvent(glm::vec3 position) {
+    m_DebugInfo.Position = position;
+}
+
+void HUDLayer::OnBlockHitUpdatedEvent(glm::vec3 position) {
+    m_DebugInfo.BlockHit = position;
 }

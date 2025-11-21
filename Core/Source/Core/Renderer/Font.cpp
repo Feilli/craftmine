@@ -90,7 +90,7 @@ namespace Renderer {
 
         // uv attribute (location = 1)
         glEnableVertexArrayAttrib(m_VertexArray, 1);
-        glVertexArrayAttribFormat(m_VertexArray, 1, 2, GL_FLOAT, GL_FALSE, static_cast<GLuint>(offsetof(Vertex, TexCoord)));
+        glVertexArrayAttribFormat(m_VertexArray, 1, 2, GL_FLOAT, GL_FALSE, static_cast<GLuint>(offsetof(Vertex, UVs)));
         glVertexArrayAttribBinding(m_VertexArray, 1, 0);
 
         // bind the element buffer to the vertex array

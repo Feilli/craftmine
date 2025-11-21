@@ -2,24 +2,19 @@
 
 #include "Texture.h"
 
+#include <glm/glm.hpp>
+
 #include <memory>
 #include <filesystem>
 
 namespace Renderer {
-    
-    struct UVRect {
-        float UMin = 0.0f;
-        float UMax = 1.0f;
-        float VMin = 0.0f;
-        float VMax = 1.0f;
-    };
 
     class TextureAtlas {
     public:
         TextureAtlas(const std::filesystem::path& path, int width, int height);
         ~TextureAtlas();
 
-        UVRect GetTileUV(int x, int y);
+        std::vector<glm::vec2> GetTileUV(int x, int y) const;
         std::shared_ptr<Texture> GetTexture();
 
     private:

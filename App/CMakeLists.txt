@@ -8,12 +8,12 @@ set(SOURCES
     Source/HUDLayer.cpp
     Source/Camera.h
     Source/Camera.cpp
-    Source/Block.h
-    Source/Block.cpp
-    Source/BlockRegistry.h
-    Source/BlockRegistry.cpp
     Source/Chunk.h
     Source/Chunk.cpp
+    Source/Intersects.h
+    Source/Intersects.cpp
+    Source/BoundingBox.h
+    Source/BoundingBox.cpp
     Source/Perlin.h
     Source/Perlin.cpp
 )

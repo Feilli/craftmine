@@ -62,18 +62,39 @@ void Camera::UpdatePosition(float deltaTime) {
     }
 }
 
-glm::vec3 Camera::GetPosition() {
+glm::vec3 Camera::GetPosition() const {
     return m_Position;
 }
 
-glm::mat4 Camera::GetViewProjectionMatrix() {
+glm::mat4 Camera::GetViewProjectionMatrix() const {
     return m_ProjectionMatrix * m_ViewMatrix;
 }
 
-glm::mat4 Camera::GetViewMatrix() {
+glm::mat4 Camera::GetViewMatrix() const {
     return m_ViewMatrix;
 }
 
-glm::mat4 Camera::GetProjectionMatrix() {
+glm::mat4 Camera::GetProjectionMatrix() const {
     return m_ProjectionMatrix;
+}
+
+glm::vec3 Camera::CastRay() {
+    // cast ray from the camera center
+    glm::vec2 cursorPos = Core::Application::Get().GetCursorPos();
+    glm::vec2 frameBufferSize = Core::Application::Get().GetFrameBufferSize();
+
+    // normalize
+    float x = (2.0f * cursorPos.x) / frameBufferSize.x - 1.0f;
+    float y = 1.0f - (2.0f * cursorPos.y) / frameBufferSize.y;
+    
+    glm::vec2 normalizedCursorPos = glm::vec2(x, y);
+
+    // convert normalize pos to world space
+    glm::vec4 ray = glm::vec4(normalizedCursorPos.x, normalizedCursorPos.y, -1.0f, 1.0f);
+
+    glm::vec4 rayProjection = glm::inverse(GetProjectionMatrix()) * ray;
+    rayProjection.z = -1.0f;
+    rayProjection.w = 0.0f;
+
+    return glm::normalize(glm::vec3(glm::inverse(GetViewMatrix()) * rayProjection)); 
 }
