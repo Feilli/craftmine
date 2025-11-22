@@ -9,6 +9,7 @@
 #include "Chunk.h"
 #include "Intersects.h"
 #include "BoundingBox.h"
+#include "Perlin.h"
 
 #include <glm/glm.hpp>
 
@@ -60,4 +61,6 @@ private:
     
     BoundingBox m_BoundingBox;
     Camera m_Camera;
+
+    Perlin m_PerlinNoise;
 };

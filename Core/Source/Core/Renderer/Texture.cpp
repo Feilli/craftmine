@@ -22,6 +22,7 @@ namespace Renderer {
     uint32_t LoadTexture(const std::filesystem::path& path, int& width, int& height) {
         int channels;
         std::string filepath = path.string();
+
         unsigned char* data = stbi_load(filepath.c_str(), &width, &height, &channels, 0);
 
         if (!data) {

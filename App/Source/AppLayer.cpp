@@ -53,6 +53,8 @@ AppLayer::AppLayer() {
 
     // load texture
     m_TextureAtlas = std::make_shared<Renderer::TextureAtlas>("Textures/terrain.png", 16, 16);
+    
+    Perlin m_PerlinNoise(1234567890);
 
     // enable depth test
     glEnable(GL_DEPTH_TEST);
@@ -108,8 +110,11 @@ void AppLayer::OnUpdate(float deltaTime) {
             if(!m_ChunkMap.contains(chunkCoordinate)) {
                 m_ChunkMap[chunkCoordinate] = std::make_shared<Chunk>(m_TextureAtlas);
 
-                // generate mesh
+                // generate chunk data (move position to constructor)
                 m_ChunkMap[chunkCoordinate]->SetPosition({ chunkCoordinate.x * Chunk::s_ChunkSize, 0, chunkCoordinate.y * Chunk::s_ChunkSize });
+                m_ChunkMap[chunkCoordinate]->Generate(m_PerlinNoise);
+
+                // generate mesh
                 m_ChunkMap[chunkCoordinate]->Update();
             } else {
                 m_ChunkMap[chunkCoordinate]->ToRemove = false;
@@ -120,13 +125,6 @@ void AppLayer::OnUpdate(float deltaTime) {
             }
         }
     }
-
-    // remove chunks marked for removal
-    /*for(const auto& chunk : m_ChunkMap) {
-        if(chunk.second->ToRemove) {
-            m_ChunkMap.erase(chunk.first);
-        }
-    }*/
 
     // set chunk visibility
     Intersects::Frustum cameraFrustum = GetFrustum(m_Camera.GetViewProjectionMatrix());

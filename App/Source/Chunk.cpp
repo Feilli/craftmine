@@ -2,6 +2,8 @@
 
 #include "Core/Renderer/Renderer.h"
 
+#include <print>
+
 Chunk::Chunk(const std::shared_ptr<Renderer::TextureAtlas>& textureAtlas) {
     // Register block types
 
@@ -19,18 +21,36 @@ Chunk::Chunk(const std::shared_ptr<Renderer::TextureAtlas>& textureAtlas) {
     // dirt
     m_BlockTypesUVsMap[Direction::ALL][BlockType::DIRT] = textureAtlas->GetTileUV(2, 0);
 
-    // set the bottom level of the chunk with stone
-    for(int x = 0; x < s_ChunkSize; x++) {
-        for(int z = 0; z < s_ChunkSize; z++) {
-            m_BlockTypes[x][0][z] = BlockType::STONE;
-        }
-    }
-
     BlockVisible.reserve(s_ChunkSize * s_ChunkSize);
 }
 
 Chunk::~Chunk() {
 
+}
+
+void Chunk::Generate(const Perlin& perlin) {
+    CreateHeightMap(perlin);
+    
+    for(int x = 0; x < s_ChunkSize; x++) {
+        for(int z = 0; z < s_ChunkSize; z++) {
+            // max height is 32 blocks
+            int height = std::floor(m_HeightMap[z * s_ChunkSize + x] * s_ChunkSize * 2);
+
+            // fill chunk with stone
+            for(int y = 0; y < height; y++) {
+                m_BlockTypes[x][y][z] = BlockType::STONE;
+            }
+
+            // replace top chunks with grass and dirt
+            m_BlockTypes[x][height - 1][z] = BlockType::GRASS;
+
+            if(height > 3) {
+                m_BlockTypes[x][height - 2][z] = BlockType::DIRT;
+                m_BlockTypes[x][height - 3][z] = BlockType::DIRT;
+                m_BlockTypes[x][height - 4][z] = BlockType::DIRT;
+            }
+        }
+    }
 }
 
 void Chunk::Update() {
@@ -225,4 +245,36 @@ bool Chunk::BlockInside(glm::ivec3 position) {
             position.x < s_ChunkSize &&
             position.y < s_ChunkSize * s_ChunkSize &&
             position.z < s_ChunkSize);
+}
+
+void Chunk::CreateHeightMap(const Perlin& perlin) {
+    float scale = 0.005f;
+    int octaves = 4;
+    float persistence = 0.5f;
+
+    glm::ivec2 chunkOffset = { m_Position.x, m_Position.z }; // y - is height of a chunk
+
+    for(int y = 0; y < s_ChunkSize; y++) {
+        for(int x = 0; x < s_ChunkSize; x++) {
+            double amplitude = 1.0;
+            double freequency = 1.0;
+            double noiseValue = 0.0;
+
+            for(int o = 0; o < octaves; o++) {
+                noiseValue += amplitude * perlin.Noise(
+                    (chunkOffset.x + x) * scale * freequency,
+                    (chunkOffset.y + y) * scale * freequency,
+                    0.0
+                );
+
+                amplitude *= persistence;
+                freequency *= 2.0;
+            }
+
+            // normalize to [0, 1]
+            noiseValue = (noiseValue + 1.0) / 2.0;
+
+            m_HeightMap[y * s_ChunkSize + x] = (float)noiseValue;
+        }
+    }
 }

@@ -4,6 +4,7 @@
 #include "Core/Renderer/TextureAtlas.h"
 
 #include "Intersects.h"
+#include "Perlin.h"
 
 #include <glm/glm.hpp>
 
@@ -112,6 +113,7 @@ public:
     Chunk(const std::shared_ptr<Renderer::TextureAtlas>& textureAtlas);
     ~Chunk();
 
+    void Generate(const Perlin& perlin);
     void Render();
     void Update();
 
@@ -137,6 +139,8 @@ public:
 
     static const int s_ChunkSize = 16;
 
+    void CreateHeightMap(const Perlin& perlin);
+
 private:
     BlockType m_BlockTypes[s_ChunkSize][s_ChunkSize * s_ChunkSize][s_ChunkSize] = { BlockType::AIR };
 
@@ -146,4 +150,6 @@ private:
     std::unordered_map<BlockType, std::vector<glm::vec2>> m_BlockTypesUVsMap[7];
     
     Renderer::Mesh m_Mesh;
+
+    float m_HeightMap[s_ChunkSize * s_ChunkSize] = { 0.0f };
 };

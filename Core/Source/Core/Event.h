@@ -19,6 +19,7 @@ namespace Core {
         BlockHitUpdated
     };
 
+    // TODO: rewrite the event dispatcher
     struct Event {
         EventType Type = EventType::KeyPressed;
         int Key = -1;

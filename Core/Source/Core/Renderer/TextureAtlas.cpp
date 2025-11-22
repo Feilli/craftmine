@@ -24,10 +24,10 @@ namespace Renderer {
         float VMax = VMin + tileH;
 
         std::vector<glm::vec2> uvs = {
-            { UMin, VMin },
-            { UMax, VMin },
-            { UMax, VMax },
             { UMin, VMax },
+            { UMax, VMax },
+            { UMax, VMin },
+            { UMin, VMin },
         };
 
         return uvs;
