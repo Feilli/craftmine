@@ -10,6 +10,8 @@ set(SOURCES
     Source/Camera.cpp
     Source/Chunk.h
     Source/Chunk.cpp
+    Source/ChunkManager.h
+    Source/ChunkManager.cpp
     Source/Intersects.h
     Source/Intersects.cpp
     Source/BoundingBox.h

@@ -2,24 +2,35 @@
 
 #include "Core/Renderer/Renderer.h"
 
+#include <glm/gtc/matrix_transform.hpp>
+
 #include <print>
 
-Chunk::Chunk(const std::shared_ptr<Renderer::TextureAtlas>& textureAtlas) {
-    // Register block types
+Chunk::Chunk(const std::shared_ptr<Renderer::TextureAtlas>& textureAtlas,
+             const std::shared_ptr<Renderer::Shader>& shader) {
+    m_Shader = shader;
+    m_TextureAtlas = textureAtlas;
 
+    // create block types
     // stone
-    m_BlockTypesUVsMap[Direction::ALL][BlockType::STONE] = textureAtlas->GetTileUV(1, 0);
+    m_BlockTypesUVsMap[Direction::ALL][BlockType::STONE] = m_TextureAtlas->GetTileUV(1, 0);
 
     // grass
-    m_BlockTypesUVsMap[Direction::FRONT][BlockType::GRASS] = textureAtlas->GetTileUV(3, 0);
-    m_BlockTypesUVsMap[Direction::BACK][BlockType::GRASS] = textureAtlas->GetTileUV(3, 0);
-    m_BlockTypesUVsMap[Direction::LEFT][BlockType::GRASS] = textureAtlas->GetTileUV(3, 0);
-    m_BlockTypesUVsMap[Direction::RIGHT][BlockType::GRASS] = textureAtlas->GetTileUV(3, 0);
-    m_BlockTypesUVsMap[Direction::TOP][BlockType::GRASS] = textureAtlas->GetTileUV(0, 0);
-    m_BlockTypesUVsMap[Direction::BOTTOM][BlockType::GRASS] = textureAtlas->GetTileUV(2, 0);
+    m_BlockTypesUVsMap[Direction::FRONT][BlockType::GRASS] = m_TextureAtlas->GetTileUV(3, 0);
+    m_BlockTypesUVsMap[Direction::BACK][BlockType::GRASS] = m_TextureAtlas->GetTileUV(3, 0);
+    m_BlockTypesUVsMap[Direction::LEFT][BlockType::GRASS] = m_TextureAtlas->GetTileUV(3, 0);
+    m_BlockTypesUVsMap[Direction::RIGHT][BlockType::GRASS] = m_TextureAtlas->GetTileUV(3, 0);
+    m_BlockTypesUVsMap[Direction::TOP][BlockType::GRASS] = m_TextureAtlas->GetTileUV(0, 0);
+    m_BlockTypesUVsMap[Direction::BOTTOM][BlockType::GRASS] = m_TextureAtlas->GetTileUV(2, 0);
 
     // dirt
-    m_BlockTypesUVsMap[Direction::ALL][BlockType::DIRT] = textureAtlas->GetTileUV(2, 0);
+    m_BlockTypesUVsMap[Direction::ALL][BlockType::DIRT] = m_TextureAtlas->GetTileUV(2, 0);
+
+    // water
+    m_BlockTypesUVsMap[Direction::ALL][BlockType::WATER] = m_TextureAtlas->GetTileUV(14, 0);
+
+    // sand
+    m_BlockTypesUVsMap[Direction::ALL][BlockType::SAND] = m_TextureAtlas->GetTileUV(2, 1);
 
     BlockVisible.reserve(s_ChunkSize * s_ChunkSize);
 }
@@ -28,13 +39,13 @@ Chunk::~Chunk() {
 
 }
 
-void Chunk::Generate(const Perlin& perlin) {
+void Chunk::Generate(const std::shared_ptr<Perlin>& perlin) {
     CreateHeightMap(perlin);
-    
+
     for(int x = 0; x < s_ChunkSize; x++) {
         for(int z = 0; z < s_ChunkSize; z++) {
             // max height is 32 blocks
-            int height = std::floor(m_HeightMap[z * s_ChunkSize + x] * s_ChunkSize * 2);
+            int height = std::floor(m_HeightMap[z * s_ChunkSize + x] * s_ChunkSize * 3 + s_ChunkSize * 2);
 
             // fill chunk with stone
             for(int y = 0; y < height; y++) {
@@ -49,25 +60,86 @@ void Chunk::Generate(const Perlin& perlin) {
                 m_BlockTypes[x][height - 3][z] = BlockType::DIRT;
                 m_BlockTypes[x][height - 4][z] = BlockType::DIRT;
             }
+
+            // everything that is height <= 64 should be filled with water
+            if(height < s_OceanLevel) {
+                for(int y = height; y < s_OceanLevel; y++) {
+                    m_BlockTypes[x][y][z] = BlockType::WATER;
+                }
+
+                m_BlockTypes[x][height - 1][z] = BlockType::SAND;
+            }
         }
     }
 }
 
 void Chunk::Update() {
-    // build chunk mesh
+    BuildSolidMesh();
+    BuildWaterMesh();
+}
+
+void Chunk::ResetMesh() {
+    m_Mesh.Reset();
+}
+
+void Chunk::BuildMesh(const std::vector<Renderer::Vertex>& vertices, const std::vector<uint32_t>& indices) {
+    m_Mesh.Build(vertices, indices);
+}
+
+void Chunk::ResetWaterMesh() {
+    m_WaterMesh.Reset();
+}
+
+void Chunk::BuildWaterMesh(const std::vector<Renderer::Vertex>& vertices, const std::vector<uint32_t>& indices) {
+    m_WaterMesh.Build(vertices, indices);
+}
+
+void Chunk::BuildSolidMesh() {
+    // build solid chunk mesh
     m_Mesh.Reset();
 
     std::vector<Renderer::Vertex> vertices;
     std::vector<uint32_t> indices;
 
-    auto getBlock = [&](int x, int y, int z) -> BlockType {
-        if(x < 0 || y < 0 || z < 0 ||
-            x >= s_ChunkSize || y >= s_ChunkSize * s_ChunkSize || z >= s_ChunkSize)
-            return BlockType::AIR;
-        return m_BlockTypes[x][y][z];
-    };
+    uint32_t indexOffset = 0;
 
     BlockVisible.clear();
+
+    for(int x = 0; x < s_ChunkSize; x++) {
+        for(int y = 0; y < s_ChunkSize * s_ChunkSize; y++) {
+            for(int z = 0; z < s_ChunkSize; z++) {
+                BlockType type = m_BlockTypes[x][y][z];
+
+                if(type == BlockType::AIR || type == BlockType::WATER)
+                    continue;
+
+                glm::vec3 blockPosition = glm::vec3(x, y, z);
+
+                Block block = CreateBlock(blockPosition);
+
+                if(block.Visible) {
+                    vertices.insert(vertices.end(), block.Vertices.begin(), block.Vertices.end());
+
+                    for(size_t i = 0; i < block.Indices.size(); i ++) {
+                        indices.push_back(indexOffset + block.Indices[i]);
+                    }
+
+                    indexOffset += block.IndexOffset;
+
+                    BlockVisible.push_back(blockPosition);
+                }
+            }
+        }
+    }
+
+    m_Mesh.Build(vertices, indices);
+}
+
+void Chunk::BuildWaterMesh() {
+    m_WaterMesh.Reset();
+
+    std::vector<Renderer::Vertex> vertices;
+    std::vector<uint32_t> indices;
 
     uint32_t indexOffset = 0;
 
@@ -76,71 +148,29 @@ void Chunk::Update() {
             for(int z = 0; z < s_ChunkSize; z++) {
                 BlockType type = m_BlockTypes[x][y][z];
 
-                if(type == BlockType::AIR)
+                if(type != BlockType::WATER)
                     continue;
 
-                // TODO: we can extract this code to change geometry of individual blocks;
-                glm::vec3 blockPosition = glm::vec3(
-                    m_Position.x + x,
-                    m_Position.y + y,
-                    m_Position.z + z
-                );
+                glm::vec3 blockPosition = glm::vec3(x, y, z);
 
-                bool visible = false;
+                Block block = CreateBlock(blockPosition);
 
-                for(int face = 0; face < 6; face++) {
-                    const glm::ivec3 directions[6] = {
-                        {  0,  0,  1 }, // front
-                        {  0,  0, -1 }, // back
-                        { -1,  0,  0 }, // left
-                        {  1,  0,  0 }, // right
-                        {  0,  1,  0 }, // top
-                        {  0, -1,  0 } // bottom
-                    };
+                if(block.Visible) {
+                    vertices.insert(vertices.end(), block.Vertices.begin(), block.Vertices.end());
 
-                    glm::ivec3 n = directions[face];
-                    BlockType neighbor = getBlock(x + n.x, y + n.y, z + n.z);
-
-                    if(!FaceVisible(type, neighbor)) {
-                        continue;
+                    for(size_t i = 0; i < block.Indices.size(); i ++) {
+                        indices.push_back(indexOffset + block.Indices[i]);
                     }
 
-                    const Face& f = s_Faces[face];
+                    indexOffset += block.IndexOffset;
 
-                    for(int i = 0; i < 4; i++) {
-                        Renderer::Vertex v;
-                        v.Position = blockPosition + f.Vertices[i];
-
-                        if(m_BlockTypesUVsMap[Direction::ALL].contains(type)) {
-                            v.UVs = m_BlockTypesUVsMap[Direction::ALL][type][i];
-                        } else {
-                            v.UVs = m_BlockTypesUVsMap[face][type][i];
-                        }
-
-                        vertices.push_back(v);
-                    }
-
-                    // Add indices
-                    indices.push_back(indexOffset + 0);
-                    indices.push_back(indexOffset + 1);
-                    indices.push_back(indexOffset + 2);
-                    indices.push_back(indexOffset + 2);
-                    indices.push_back(indexOffset + 3);
-                    indices.push_back(indexOffset + 0);
-
-                    indexOffset += 4;
-
-                    visible = true;
-                }
-
-                if(visible) {
-                    BlockVisible.push_back({ x, y, z });
+                    BlockVisible.push_back(blockPosition);
                 }
             }
         }
     }
 
-    m_Mesh.Build(vertices, indices);
+    m_WaterMesh.Build(vertices, indices);
 }
 
 Block Chunk::CreateBlock(const glm::vec3& position) {
@@ -196,9 +226,44 @@ Block Chunk::CreateBlock(const glm::vec3& position) {
     return block;
 }
 
-void Chunk::Render() {
+void Chunk::RenderOpaqueMesh(const Camera& camera) {
+    // enable shader
+    m_Shader->Use();
+
+    // bind uniforms
+    m_Shader->SetMat4("u_Projection", camera.GetProjectionMatrix());
+    m_Shader->SetMat4("u_View", camera.GetViewMatrix());
+    m_Shader->SetMat4("u_Model", glm::mat4(1.0f));
+
+    // bind texture atlas
+    m_TextureAtlas->GetTexture()->Bind();
+
+    // bind solid mesh
     m_Mesh.Bind();
+
+    // draw chunk
     glDrawElements(GL_TRIANGLES, m_Mesh.GetIndexCount(), GL_UNSIGNED_INT, 0);
+}
+
+void Chunk::RenderTranslucentMesh(const Camera& camera) {
+    if(m_WaterMesh.GetIndexCount() > 0) {
+        // enable shader
+        m_Shader->Use();
+
+        // bind uniforms
+        m_Shader->SetMat4("u_Projection", camera.GetProjectionMatrix());
+        m_Shader->SetMat4("u_View", camera.GetViewMatrix());
+        m_Shader->SetMat4("u_Model", glm::mat4(1.0f));
+
+        // bind texture atlas
+        m_TextureAtlas->GetTexture()->Bind();
+
+        // bind water mesh
+        m_WaterMesh.Bind();
+
+        // draw water
+        glDrawElements(GL_TRIANGLES, m_WaterMesh.GetIndexCount(), GL_UNSIGNED_INT, 0);
+    }
 }
 
 bool Chunk::FaceVisible(BlockType current, BlockType neighbor) {
@@ -206,7 +271,11 @@ bool Chunk::FaceVisible(BlockType current, BlockType neighbor) {
         return false;
     }
 
-    return neighbor == BlockType::AIR;
+    if(current == BlockType::WATER) {
+        return neighbor != BlockType::WATER;
+    }
+
+    return neighbor == BlockType::AIR || neighbor == BlockType::WATER;
 }
 
 Intersects::AABB Chunk::GetBoundBox() const {
@@ -225,12 +294,7 @@ void Chunk::SetBlockType(glm::ivec3 position, BlockType type) {
     m_BlockTypes[position.x][position.y][position.z] = type;
 }
 
-BlockType Chunk::GetBlockType(glm::ivec3 position) {
-    if(position.x < 0 || position.y < 0 || position.z < 0 ||
-        position.x >= s_ChunkSize || position.y >= s_ChunkSize * s_ChunkSize || position.z >= s_ChunkSize) {
-        return BlockType::AIR;
-    }
-
+BlockType Chunk::GetBlockType(glm::ivec3 position) const {
     return m_BlockTypes[position.x][position.y][position.z];
 }
 
@@ -247,8 +311,8 @@ bool Chunk::BlockInside(glm::ivec3 position) {
             position.z < s_ChunkSize);
 }
 
-void Chunk::CreateHeightMap(const Perlin& perlin) {
-    float scale = 0.005f;
+void Chunk::CreateHeightMap(const std::shared_ptr<Perlin>& perlin) {
+    float scale = 0.01f;
     int octaves = 4;
     float persistence = 0.5f;
 
@@ -261,7 +325,7 @@ void Chunk::CreateHeightMap(const Perlin& perlin) {
             double noiseValue = 0.0;
 
             for(int o = 0; o < octaves; o++) {
-                noiseValue += amplitude * perlin.Noise(
+                noiseValue += amplitude * perlin->Noise(
                     (chunkOffset.x + x) * scale * freequency,
                     (chunkOffset.y + y) * scale * freequency,
                     0.0
@@ -277,4 +341,12 @@ void Chunk::CreateHeightMap(const Perlin& perlin) {
             m_HeightMap[y * s_ChunkSize + x] = (float)noiseValue;
         }
     }
+}
+
+std::vector<glm::vec2> Chunk::GetBlockFaceUV(Direction face, BlockType type) {
+    if(m_BlockTypesUVsMap[Direction::ALL].contains(type)) {
+        return m_BlockTypesUVsMap[Direction::ALL][type];
+    }
+
+    return m_BlockTypesUVsMap[face][type];
 }

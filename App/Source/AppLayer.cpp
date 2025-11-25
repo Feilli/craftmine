@@ -10,51 +10,22 @@
 
 #include <print>
 #include <numeric>
+#include <ranges>
 
 AppLayer::AppLayer() {
-    // create a perlin noise
-    // Perlin perlin;
-
-    // const int width = 128;
-    // const int height = 128;
-
-    // std::vector<float> heightmap(width * height);
-
-    // float scale = 0.005f;
-    // int octaves = 4;
-    // float persistence = 0.5f;
-
-    // for(int y = 0; y < height; y++) {
-    //     for(int x = 0; x < width; x++) {
-    //         double amplitude = 1.0;
-    //         double freequency = 1.0;
-    //         double noiseValue = 0.0;
-
-    //         for(int o = 0; o < octaves; o++) {
-    //             noiseValue += amplitude * perlin.Noise(
-    //                 x * scale * freequency,
-    //                 y * scale * freequency,
-    //                 0.0
-    //             );
-
-    //             amplitude *= persistence;
-    //             freequency *= 2.0;
-    //         }
-
-    //         // normalize to [0, 1]
-    //         noiseValue = (noiseValue + 1.0) / 2.0;
-
-    //         heightmap[y * width + x] = (float)noiseValue;
-    //     }
-    // }
-
     // load shaders
-    m_Shader = std::make_shared<Renderer::Shader>("Shaders/BlockVertex.glsl", "Shaders/BlockFragment.glsl");
+    m_ChunkShader = std::make_shared<Renderer::Shader>("Shaders/ChunkVertex.glsl", "Shaders/ChunkFragment.glsl");
 
     // load texture
     m_TextureAtlas = std::make_shared<Renderer::TextureAtlas>("Textures/terrain.png", 16, 16);
     
-    Perlin m_PerlinNoise(1234567890);
+    // create perling noise obejct
+    m_PerlinNoise = std::make_shared<Perlin>(1234567890);
+
+    // create chunk manager
+    m_ChunkManager = std::make_shared<ChunkManager>(m_TextureAtlas, m_ChunkShader, m_PerlinNoise);
+    
+    m_ChunksSorted.reserve(m_ViewDistance * m_ViewDistance);
 
     // enable depth test
     glEnable(GL_DEPTH_TEST);
@@ -92,89 +63,67 @@ void AppLayer::OnUpdate(float deltaTime) {
     m_Camera.Update(deltaTime);
     glm::vec3 cameraRay = m_Camera.CastRay();
 
-    // mark chunks for removal
-    std::vector<glm::ivec2> chunksToRemove;
-    chunksToRemove.reserve(m_ViewDistance);
+    UpdateChunks();
 
-    for(const auto& chunk: m_ChunkMap) {
-        chunk.second->ToRemove = true;
+    // sort chunks from camera
+    m_ChunksSorted.clear();
+
+    for(auto chunk = m_ChunkManager->ChunksBegin(); chunk != m_ChunkManager->ChunksEnd(); ++chunk) {
+        Intersects::AABB chunkBoundingBox = chunk->second->GetBoundBox();
+        
+        glm::vec2 minBound = { chunkBoundingBox.MinBound.x, chunkBoundingBox.MinBound.z };
+        glm::vec2 maxBound = { chunkBoundingBox.MaxBound.x, chunkBoundingBox.MaxBound.z };
+
+        glm::vec2 center = (minBound + maxBound) * 0.5f;
+        glm::vec2 cameraPosition = { m_Camera.GetPosition().x, m_Camera.GetPosition().z };
+
+        // calculate squared distance between center of the chunk and camera
+        // we can actually cache it on chunks itself
+        glm::vec2 diff = center - cameraPosition;
+        float distance = glm::dot(diff, diff);
+
+        m_ChunksSorted.push_back({chunk->first, distance});
     }
 
-    // generate chunks
-    glm::ivec2 cameraChunk = AppLayer::WorldToChunkCoordinate(m_Camera.GetPosition());
-
-    for(int x = -m_ViewDistance; x <= m_ViewDistance; x++) {
-        for(int y = -m_ViewDistance; y <= m_ViewDistance; y++) {
-            glm::ivec2 chunkCoordinate = cameraChunk + glm::ivec2(x, y);
-
-            if(!m_ChunkMap.contains(chunkCoordinate)) {
-                m_ChunkMap[chunkCoordinate] = std::make_shared<Chunk>(m_TextureAtlas);
-
-                // generate chunk data (move position to constructor)
-                m_ChunkMap[chunkCoordinate]->SetPosition({ chunkCoordinate.x * Chunk::s_ChunkSize, 0, chunkCoordinate.y * Chunk::s_ChunkSize });
-                m_ChunkMap[chunkCoordinate]->Generate(m_PerlinNoise);
-
-                // generate mesh
-                m_ChunkMap[chunkCoordinate]->Update();
-            } else {
-                m_ChunkMap[chunkCoordinate]->ToRemove = false;
-            }
-
-            if(m_ChunkMap[chunkCoordinate]->ToRemove) {
-                m_ChunkMap.erase(chunkCoordinate);
-            }
-        }
-    }
+    std::sort(m_ChunksSorted.begin(), m_ChunksSorted.end(),
+              [](auto& a, auto& b){ return a.Distance < b.Distance; });
 
     // set chunk visibility
     Intersects::Frustum cameraFrustum = GetFrustum(m_Camera.GetViewProjectionMatrix());
 
-    for(const auto& chunk : m_ChunkMap) {
-        if(Intersects::AABBFrustum(cameraFrustum, chunk.second->GetBoundBox())) {
-            chunk.second->Visible = true;
+    for(auto chunk = m_ChunkManager->ChunksBegin(); chunk != m_ChunkManager->ChunksEnd(); ++chunk) {
+        if(Intersects::AABBFrustum(cameraFrustum, chunk->second->GetBoundBox())) {
+            chunk->second->Visible = true;
         } else {
-            chunk.second->Visible = false;
+            chunk->second->Visible = false;
         }
     }
 
     // hightlight block
     float closestDistance = Chunk::s_ChunkSize; // maximum distance from which we pick up an object
 
-    struct ChunkDistance { 
-        glm::ivec2 Chunk;
-        float Distance;
-    };
+    m_BlockHit.Hit = false;
 
-    std::vector<ChunkDistance> chunksSorted;
+    const float viewDistanceSquared = Chunk::s_ChunkSize * Chunk::s_ChunkSize * 4;
 
-    // find chunks to scan
-    for(const auto& chunk : m_ChunkMap) {
-        if(!chunk.second->Visible) {
+    // for(const auto& chunk : hitCandidates) {
+    for(const auto& chunk : m_ChunksSorted) {
+        if(!m_ChunkManager->GetChunk(chunk.Chunk)->Visible) {
             continue;
         }
 
-        float distance;
-        bool highlight = Intersects::RayAABB(m_Camera.GetPosition(), cameraRay, chunk.second->GetBoundBox(), distance);
-
-        if(highlight && distance < closestDistance) {
-            chunksSorted.push_back({ chunk.first, distance });
+        if(chunk.Distance > viewDistanceSquared) {
+            continue;
         }
-    }
 
-    std::sort(chunksSorted.begin(), chunksSorted.end(),
-             [](auto& a, auto& b){ return a.Distance < b.Distance; });
+        for(const auto& block : m_ChunkManager->GetChunk(chunk.Chunk)->BlockVisible) {
+            BlockType type = m_ChunkManager->GetChunk(chunk.Chunk)->GetBlockType(block);
 
-    m_BlockHit.Hit = false;
-
-    for(const auto& chunk : chunksSorted) {
-        for(const auto& block : m_ChunkMap[chunk.Chunk]->BlockVisible) {
-            BlockType type = m_ChunkMap[chunk.Chunk]->GetBlockType(block);
-
-            if(type == BlockType::AIR) {
+            if(type == BlockType::AIR || type == BlockType::WATER) {
                 continue;
             }
 
-            glm::vec3 position = m_ChunkMap[chunk.Chunk]->GetBlockPosition(block);
+            glm::vec3 position = m_ChunkManager->GetChunk(chunk.Chunk)->GetBlockPosition(block);
 
             Intersects::AABB boundBox = {
                 position - glm::vec3(0.5f),
@@ -193,10 +142,14 @@ void AppLayer::OnUpdate(float deltaTime) {
                 m_BlockHit.Block = block;
             }
         }
+
+        if(m_BlockHit.Hit) {
+            break;
+        }
     }
 
     if(m_BlockHit.Hit) {
-        glm::vec3 position = m_ChunkMap[m_BlockHit.Chunk]->GetBlockPosition(m_BlockHit.Block);
+        glm::vec3 position = m_ChunkManager->GetChunk(m_BlockHit.Chunk)->GetBlockPosition(m_BlockHit.Block);
 
         Intersects::AABB boundBox = {
             -glm::vec3(0.5f),
@@ -232,23 +185,28 @@ void AppLayer::OnRender() {
     // enable depth testing
     glEnable(GL_DEPTH_TEST);
 
-    // render cube
-    // TODO: move it inside of a chunk
-    // TODO: Pass camera information to chunk
-    m_Shader->Use();
+    int chunksRendered = 0;
 
-    // bind global uniforms
-    m_Shader->SetMat4("u_Projection", m_Camera.GetProjectionMatrix());
-    m_Shader->SetMat4("u_View", m_Camera.GetViewMatrix());
-
-    // bind texture atlas
-    m_TextureAtlas->GetTexture()->Bind();
-    
-    for(auto chunk : m_ChunkMap) {
-        if(chunk.second->Visible) {
-            chunk.second->Render();
+    // render terrain
+    for(auto chunk = m_ChunkManager->ChunksBegin(); chunk != m_ChunkManager->ChunksEnd(); ++chunk) {
+        if(chunk->second->Visible) {
+            chunk->second->RenderOpaqueMesh(m_Camera);
+            chunksRendered++;
         }
     }
+
+    // std::println("Rendered {} chunks", chunksRendered);
+
+    // render water
+    glDepthMask(GL_FALSE);
+
+    for(auto chunk = m_ChunkManager->ChunksBegin(); chunk != m_ChunkManager->ChunksEnd(); ++chunk) {
+        if(chunk->second->Visible) {
+            chunk->second->RenderTranslucentMesh(m_Camera);
+        }
+    }
+
+    glDepthMask(GL_TRUE);
 
     // render bounding box
     if(m_BlockHit.Hit) {
@@ -295,37 +253,20 @@ void AppLayer::OnMouseButtonEventHandler(const Core::Event& event) {
             glm::vec3 cameraRay = m_Camera.CastRay();
 
             Intersects::FaceHit faceHit;
-
-            glm::vec3 position = m_ChunkMap[m_BlockHit.Chunk]->GetBlockPosition(m_BlockHit.Block);
+            glm::vec3 position = m_ChunkManager->GetChunk(m_BlockHit.Chunk)->GetBlockPosition(m_BlockHit.Block);
             glm::mat4 modelMatrix = glm::translate(glm::mat4(1.0f), position);
-
+            
             bool isFaceHit = Intersects::RayFace(m_Camera.GetPosition(), cameraRay, modelMatrix, faceHit);
 
             if(isFaceHit) {
-                glm::ivec3 newBlock = m_BlockHit.Block + glm::ivec3(faceHit.Normal);
+                glm::ivec3 newBlock = glm::ivec3(position) + glm::ivec3(faceHit.Normal);
+                glm::ivec2 chunkPosition = m_ChunkManager->GetBlockChunk(newBlock);
 
-                // check if block is out of chunk bounds
-                if(m_ChunkMap[m_BlockHit.Chunk]->BlockInside(newBlock)) {
-                    m_ChunkMap[m_BlockHit.Chunk]->SetBlockType(newBlock, BlockType::DIRT);
-                    m_ChunkMap[m_BlockHit.Chunk]->Update();
-                } else {
-                    // find neighbour chunk
-                    glm::ivec2 neighborChunk = m_BlockHit.Chunk + glm::ivec2(faceHit.Normal.x, faceHit.Normal.z);
+                if(m_ChunkManager->GetBlockType(newBlock) == BlockType::AIR || m_ChunkManager->GetBlockType(newBlock) == BlockType::WATER) {
+                    m_ChunkManager->SetBlockType(newBlock, BlockType::DIRT);
 
-                    if(newBlock.x < 0) {
-                        newBlock.x = Chunk::s_ChunkSize + newBlock.x;
-                    }
-
-                    if(newBlock.y < 0) {
-                        newBlock.y = Chunk::s_ChunkSize + newBlock.y;
-                    }
-
-                    if(newBlock.z < 0) {
-                        newBlock.z = Chunk::s_ChunkSize + newBlock.z;
-                    }
-
-                    m_ChunkMap[neighborChunk]->SetBlockType(newBlock, BlockType::DIRT);
-                    m_ChunkMap[neighborChunk]->Update();
+                    std::shared_ptr<Chunk> chunk = m_ChunkManager->GetChunk(chunkPosition);
+                    m_ChunkManager->BuildChunkMesh(chunk);
                 }
             }
         }
@@ -333,12 +274,72 @@ void AppLayer::OnMouseButtonEventHandler(const Core::Event& event) {
 
     if(event.Type == Core::EventType::MouseButtonReleased && event.Key == GLFW_MOUSE_BUTTON_RIGHT) {
         if(m_BlockHit.Hit) {
-            m_ChunkMap[m_BlockHit.Chunk]->SetBlockType(m_BlockHit.Block, BlockType::AIR);
-            m_ChunkMap[m_BlockHit.Chunk]->Update();
+            std::shared_ptr<Chunk> chunk = m_ChunkManager->GetChunk(m_BlockHit.Chunk);
+
+            chunk->SetBlockType(m_BlockHit.Block, BlockType::AIR);
+
+            // rebuild main chunk
+            m_ChunkManager->BuildChunkMesh(chunk);
+
+            // find neighbours chunks and rebuild those
+            const glm::ivec2 chunkNeighbours[4] = {
+                { -1,  0 },
+                {  1,  0 },
+                {  0, -1 },
+                {  0,  1 }
+            };
+
+            for(const auto& neightbour : chunkNeighbours) {
+                glm::ivec2 neightbourPosition = m_BlockHit.Chunk + neightbour;
+                std::shared_ptr<Chunk> neightbourChunk = m_ChunkManager->GetChunk(neightbourPosition);
+
+                m_ChunkManager->BuildChunkMesh(neightbourChunk);
+            }
         }
     }
 }
 
+void AppLayer::UpdateChunks() {
+    // generate chunks
+    glm::ivec2 cameraChunk = AppLayer::WorldToChunkCoordinate(m_Camera.GetPosition());
+
+    std::vector<glm::ivec2> chunksCreated;
+
+    for(int x = -m_ViewDistance; x <= m_ViewDistance; x++) {
+        for(int y = -m_ViewDistance; y <= m_ViewDistance; y++) {
+            glm::ivec2 chunk = cameraChunk + glm::ivec2(x, y);
+            float distance = glm::length(glm::vec2(chunk - cameraChunk));
+
+            if(distance <= m_ViewDistance && !m_ChunkManager->ChunkExists(chunk)) {
+                m_ChunkManager->CreateChunk(chunk);
+                chunksCreated.push_back(chunk);
+            }
+        }
+    }
+
+    for(const auto& chunkPosition : chunksCreated) {
+        std::shared_ptr<Chunk> chunk = m_ChunkManager->GetChunk(chunkPosition);
+        m_ChunkManager->BuildChunkMesh(chunk);
+    }
+
+    // remove chunks out of view distance
+    std::vector<glm::ivec2> chunksToRemove;
+    chunksToRemove.reserve(m_ViewDistance);
+
+    for(auto chunk = m_ChunkManager->ChunksBegin(); chunk != m_ChunkManager->ChunksEnd(); ++chunk) {
+        float distance = glm::length(glm::vec2(chunk->first - cameraChunk));
+
+        if(distance > m_ViewDistance) {
+            chunksToRemove.push_back(chunk->first);
+        }
+    }
+
+    for(const auto& chunk : chunksToRemove) {
+        m_ChunkManager->DestroyChunk(chunk);
+    }
+}
+
+// TODO: move to chunk manager
 glm::ivec2 AppLayer::WorldToChunkCoordinate(const glm::vec3& position) {
     return glm::ivec2(
         std::floor(position.x / Chunk::s_ChunkSize),

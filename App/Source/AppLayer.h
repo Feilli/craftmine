@@ -7,6 +7,7 @@
 
 #include "Camera.h"
 #include "Chunk.h"
+#include "ChunkManager.h"
 #include "Intersects.h"
 #include "BoundingBox.h"
 #include "Perlin.h"
@@ -36,9 +37,15 @@ public:
     void OnKeyEventHandler(const Core::Event& event);
     void OnMouseButtonEventHandler(const Core::Event& event);
 
+     BlockType GetWorldBlockType(glm::ivec3 position);
 private:
-    std::shared_ptr<Renderer::Shader> m_Shader;
+    void UpdateChunks();
+
+    std::shared_ptr<Renderer::Shader> m_ChunkShader;
     std::shared_ptr<Renderer::TextureAtlas> m_TextureAtlas;
+
+    std::shared_ptr<ChunkManager> m_ChunkManager;
+    std::shared_ptr<Perlin> m_PerlinNoise;
 
     int m_ViewDistance = 8;
 
@@ -55,12 +62,17 @@ private:
         }
     };
 
-    std::unordered_map<glm::ivec2, std::shared_ptr<Chunk>, ivec2_hash> m_ChunkMap;
+    // std::unordered_map<glm::ivec2, std::shared_ptr<Chunk>, ivec2_hash> m_ChunkMap;
+
+    struct ChunkDistance { 
+        glm::ivec2 Chunk;
+        float Distance;
+    };
+
+    std::vector<ChunkDistance> m_ChunksSorted;
 
     BlockHit m_BlockHit;
-    
     BoundingBox m_BoundingBox;
     Camera m_Camera;
-
-    Perlin m_PerlinNoise;
+    
 };

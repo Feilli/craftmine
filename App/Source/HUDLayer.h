@@ -10,8 +10,8 @@
 
 struct DebugInfo {
     int FPS = 0;
-    glm::vec3 Position;
-    glm::vec3 BlockHit;
+    glm::vec3 Position = glm::vec3(0.0f);
+    glm::vec3 BlockHit = glm::vec3(0.0f);
 };
 
 class HUDLayer : public Core::Layer {
