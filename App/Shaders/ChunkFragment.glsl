@@ -1,11 +1,36 @@
 #version 460 core
 
-layout (location = 0) in vec2 TexCoords;
+in VS_OUT {
+    vec2 uv;
+    vec3 normal;
+    float ao;
+} fs_in;
 
-layout (binding = 0) uniform sampler2D u_Atlas;
+uniform sampler2D u_Atlas;
 
-layout (location = 0) out vec4 FragColor;
+uniform vec3 u_SunDirection;
+uniform vec3 u_SunColor;
+uniform vec3 u_AmbientColor;
+
+out vec4 FragColor;
 
 void main() {
-    FragColor = texture(u_Atlas, TexCoords);
+    vec4 textureColor = texture(u_Atlas, fs_in.uv);
+
+    // if(textureColor.a < 0.1) {
+    //     discard;
+    // }
+
+    // compute diffuse lighting
+    float diffuse = max(dot(fs_in.normal, -u_SunDirection), 0.0);
+
+    // combine diffuse and ambient
+    vec3 lighting = u_AmbientColor + diffuse * u_SunColor;
+
+    // apply AO as darkening factor
+    float ao = fs_in.ao / 3.0;
+
+    lighting *= ao;
+
+    FragColor = vec4(textureColor.rgb * lighting, textureColor.a);
 } 

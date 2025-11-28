@@ -37,6 +37,7 @@ namespace Intersects {
         glm::vec3 Normal = glm::vec3(0.0f, 0.0f, 0.0f);
     };
 
+    Frustum GetFrustumFromViewProjectionMatrix(const glm::mat4& matrix);
     bool RayAABB(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, const AABB& boundBox, float& tNear);
     bool RayFace(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, const glm::mat4& model, FaceHit& hit);
     bool AABBFrustum(const Frustum& frustum, const AABB& box);

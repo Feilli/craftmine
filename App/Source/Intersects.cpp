@@ -1,6 +1,37 @@
 #include "Intersects.h"
 
+#include <glm/gtc/matrix_access.hpp>
+
 namespace Intersects {
+
+    Frustum GetFrustumFromViewProjectionMatrix(const glm::mat4& matrix) {
+        Intersects::Frustum f;
+
+        glm::vec4 rowX = glm::row(matrix, 0);
+        glm::vec4 rowY = glm::row(matrix, 1);
+        glm::vec4 rowZ = glm::row(matrix, 2);
+        glm::vec4 rowW = glm::row(matrix, 3);
+
+        glm::vec4 planes[6] = {
+            rowW + rowX, // left
+            rowW - rowX, // right
+            rowW + rowY, // bottom
+            rowW - rowY, // top
+            rowW + rowZ, // near
+            rowW - rowZ // far
+        };
+
+        for(int i = 0; i < 6; i++) {
+            glm::vec3 normal = glm::vec3(planes[i]);
+            float d = planes[i].w;
+
+            float len = glm::length(normal);
+            f.Faces[i].Normal = normal / len;
+            f.Faces[i].D      = d / len;
+        }
+
+        return f;
+    }
 
     bool RayAABB(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, const AABB& boundBox, float& tNear) {
         float tmin = -FLT_MAX;

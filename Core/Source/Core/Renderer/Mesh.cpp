@@ -42,6 +42,16 @@ namespace Renderer {
         glVertexArrayAttribFormat(m_VertexArray, 1, 2, GL_FLOAT, GL_FALSE, offsetof(Vertex, UVs));
         glVertexArrayAttribBinding(m_VertexArray, 1, 0);
 
+        // bind normal (location = 2)
+        glEnableVertexArrayAttrib(m_VertexArray, 2);
+        glVertexArrayAttribFormat(m_VertexArray, 2, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, Normal));
+        glVertexArrayAttribBinding(m_VertexArray, 2, 0);
+
+        // bind ambient occlusion (location = 3)
+        glEnableVertexArrayAttrib(m_VertexArray, 3);
+        glVertexArrayAttribFormat(m_VertexArray, 3, 1, GL_UNSIGNED_BYTE, GL_FALSE, offsetof(Vertex, AO));
+        glVertexArrayAttribBinding(m_VertexArray, 3, 0);
+
         // bind the element buffer to the vertex array
         glVertexArrayElementBuffer(m_VertexArray, m_ElementBuffer);
 

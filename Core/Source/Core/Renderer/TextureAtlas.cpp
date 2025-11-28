@@ -27,7 +27,7 @@ namespace Renderer {
             { UMin, VMax },
             { UMax, VMax },
             { UMax, VMin },
-            { UMin, VMin },
+            { UMin, VMin }
         };
 
         return uvs;

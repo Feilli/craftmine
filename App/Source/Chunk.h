@@ -6,8 +6,9 @@
 #include "Core/Renderer/TextureAtlas.h"
 
 #include "Camera.h"
-#include "Intersects.h"
 #include "Perlin.h"
+#include "Lighting.h"
+#include "Intersects.h"
 
 #include <glm/glm.hpp>
 
@@ -15,12 +16,15 @@
 #include <unordered_map>
 
 enum BlockType {
+    VOID,
     AIR,
     STONE,
     DIRT,
     GRASS,
     WATER,
-    SAND
+    SAND,
+    WOOD,
+    LEAVES
 };
 
 enum Direction {
@@ -33,8 +37,8 @@ enum Direction {
     ALL
 };
 
-struct Block {
-    BlockType Type;
+struct BlockMesh {
+    BlockType Type = BlockType::AIR;
 
     bool Visible = false;
 
@@ -45,6 +49,7 @@ struct Block {
 };
 
 struct Face {
+    Direction Direction;
     glm::vec3 Normal;
     glm::vec3 Vertices[4];
 };
@@ -52,6 +57,7 @@ struct Face {
 static const Face s_Faces[6] = {
     // font
     { 
+        Direction::FRONT,
         { 0.0f, 0.0f, 1.0f },
         {
             { -0.5f, -0.5f,  0.5f },
@@ -62,6 +68,7 @@ static const Face s_Faces[6] = {
     },
     // back
     {
+        Direction::BACK,
         { 0.0f, 0.0f, -1.0f },
         {
             {  0.5f, -0.5f, -0.5f },
@@ -72,6 +79,7 @@ static const Face s_Faces[6] = {
     },
     // left
     {
+        Direction::LEFT,
         { -1.0f, 0.0f, 0.0f },
         {
             { -0.5f, -0.5f, -0.5f },
@@ -82,6 +90,7 @@ static const Face s_Faces[6] = {
     },
     // right
     {
+        Direction::RIGHT,
         { 1.0f, 0.0f, 0.0f },
         {
             {  0.5f, -0.5f,  0.5f },
@@ -92,7 +101,8 @@ static const Face s_Faces[6] = {
     },
     // top
     {
-        { 0.0f, 1.0f, 0.0f },
+        Direction::TOP,
+        { 0.0f, -1.0f, 0.0f },
         {
             { -0.5f,  0.5f,  0.5f },
             {  0.5f,  0.5f,  0.5f },
@@ -102,7 +112,8 @@ static const Face s_Faces[6] = {
     },
     // bottom
     {
-        { 0.0f, -1.0f, 0.0f },
+        Direction::BOTTOM,
+        { 0.0f, 1.0f, 0.0f },
         {
             { -0.5f, -0.5f, -0.5f },
             {  0.5f, -0.5f, -0.5f },
@@ -112,68 +123,115 @@ static const Face s_Faces[6] = {
     }
 };
 
+struct Decoration {
+    glm::vec3 Position;
+    BlockType Type;
+};
+
+static const Decoration s_Tree[22] = {
+    { {  0,  5,  0 }, BlockType::LEAVES },
+
+    { { -1,  4,  0 }, BlockType::LEAVES },
+    { { -1,  4, -1 }, BlockType::LEAVES },
+    { {  0,  4, -1 }, BlockType::LEAVES },
+    { {  1,  4, -1 }, BlockType::LEAVES },
+    { {  1,  4,  0 }, BlockType::LEAVES },
+    { {  1,  4,  1 }, BlockType::LEAVES },
+    { {  0,  4,  1 }, BlockType::LEAVES },
+    { { -1,  4,  1 }, BlockType::LEAVES },
+    { {  0,  4,  0 }, BlockType::LEAVES },
+
+    { { -1,  3,  0 }, BlockType::LEAVES },
+    { { -1,  3, -1 }, BlockType::LEAVES },
+    { {  0,  3, -1 }, BlockType::LEAVES },
+    { {  1,  3, -1 }, BlockType::LEAVES },
+    { {  1,  3,  0 }, BlockType::LEAVES },
+    { {  1,  3,  1 }, BlockType::LEAVES },
+    { {  0,  3,  1 }, BlockType::LEAVES },
+    { { -1,  3,  1 }, BlockType::LEAVES },
+    { {  0,  3,  0 }, BlockType::WOOD },
+
+    { {  0,  2,  0 }, BlockType::WOOD },
+    { {  0,  1,  0 }, BlockType::WOOD },
+    { {  0,  0,  0 }, BlockType::WOOD },
+};
+
+struct VertexNeighbors {
+    glm::vec3 Neighbors[3];
+};
+
+enum ChunkState {
+    CREATED,
+    DECORATED,
+    MESHED
+};
+
+class ChunkManager;
+
 class Chunk {
 public:
-    Chunk(const std::shared_ptr<Renderer::TextureAtlas>& textureAtlas,
+    Chunk(ChunkManager* chunkManager,
+          glm::ivec2 key,
+          const std::shared_ptr<Renderer::TextureAtlas>& textureAtlas,
           const std::shared_ptr<Renderer::Shader>& shader);
     ~Chunk();
 
-    void Generate(const std::shared_ptr<Perlin>& perlin);
-    void RenderOpaqueMesh(const Camera& camera);
-    void RenderTranslucentMesh(const Camera& camera);
-
-    void Update();
+    void Generate();
+    void GenerateDecorations();
 
     void ResetMesh();
-    void BuildMesh(const std::vector<Renderer::Vertex>& vertices, const std::vector<uint32_t>& indices);
+    void BuildMesh();
 
-    void ResetWaterMesh();
-    void BuildWaterMesh(const std::vector<Renderer::Vertex>& vertices, const std::vector<uint32_t>& indices);
+    void RenderOpaqueMesh(const Camera& camera, const Lighting::Sun& sun);
+    void RenderTranslucentMesh(const Camera& camera, const Lighting::Sun& sun);
 
-    void BuildSolidMesh();
-    void BuildWaterMesh();
+    Intersects::AABB GetBoundingBox();
 
-    Block CreateBlock(const glm::vec3& position);
+    glm::vec3 GetPosition();
+    void SetPosition(const glm::vec3& position);
+
+    BlockType GetBlockType(const glm::vec3& position);
+    void SetBlockType(const glm::vec3 & position, const BlockType& type);
+
+    ChunkState GetState();
+public:
+    bool Visible = false;
+    std::vector<glm::vec3> BlockVisible;
+
+    static const int s_ChunkSize = 16;
+    static const int s_WaterLevel = 48;
+private:
+    void PlaceTree(const glm::vec3& position);
 
     bool FaceVisible(BlockType current, BlockType neighbor);
 
-    void SetPosition(glm::ivec3 position);
-    void SetBlockType(glm::ivec3 position, BlockType type);
+    uint8_t CreateVertexAO(const glm::vec3& position, const Direction& direction, const size_t& vertex);
 
-    Intersects::AABB GetBoundBox() const;
+    BlockMesh CreateBlockMesh(const glm::vec3& position, const BlockType& type);
 
-    // those should return and accept local position
-    BlockType GetBlockType(glm::ivec3 position) const;
-    glm::vec3 GetBlockPosition(glm::ivec3 position);
-
-    bool BlockInside(glm::ivec3 position);
-
-    void CreateHeightMap(const std::shared_ptr<Perlin>& perlin);
-
-    std::vector<glm::vec2> GetBlockFaceUV(Direction face, BlockType type);
-public:
-    bool ToRemove = false;
-    bool Visible = false;
-    
-    static const int s_ChunkSize = 16;
-    static const int s_OceanLevel = 48;
-
-    std::vector<glm::ivec3> BlockVisible;
+    std::array<float, s_ChunkSize * s_ChunkSize> CreateHeightMap(const Perlin& perlin, 
+                                                                 const float& scale = 0.01f, 
+                                                                 const int& octaves = 4, 
+                                                                 const float& persistence = 0.5f);
 private:
-    ChunkManager* manager;
+    ChunkState m_State = ChunkState::CREATED;
 
-    BlockType m_BlockTypes[s_ChunkSize][s_ChunkSize * s_ChunkSize][s_ChunkSize] = { BlockType::AIR };
+    glm::ivec2 m_Key;
+    glm::vec3 m_Position;
 
-    glm::ivec3 m_Position;
-    Intersects::AABB m_BoundBox;
+    ChunkManager* m_ChunkManager;
 
-    std::unordered_map<BlockType, std::vector<glm::vec2>> m_BlockTypesUVsMap[7];
-    
+    Renderer::Mesh m_OpaqueMesh;
+    Renderer::Mesh m_TranslucentMesh;
+
     std::shared_ptr<Renderer::TextureAtlas> m_TextureAtlas;
     std::shared_ptr<Renderer::Shader> m_Shader;
 
-    Renderer::Mesh m_Mesh;
-    Renderer::Mesh m_WaterMesh;
+    std::unordered_map<BlockType, glm::ivec2> m_BlockTypesUVsMap[7];
+    std::unordered_map<Direction, std::vector<glm::vec3>> m_VertexNeighbors[4];
 
-    float m_HeightMap[s_ChunkSize * s_ChunkSize] = { 0.0f };
+    std::array<std::array<std::array<BlockType, s_ChunkSize>, s_ChunkSize * s_ChunkSize>, s_ChunkSize> m_BlockTypes{};
+    Intersects::AABB m_BoundingBox;
+
+    std::array<float, s_ChunkSize * s_ChunkSize> m_HeightMap = { 0.0f };
 };
