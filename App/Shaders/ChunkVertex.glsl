@@ -15,12 +15,14 @@ uniform mat4 u_View;
 uniform mat4 u_Model;
 
 out VS_OUT {
+    vec3 fragPos;
     vec2 uv;
     vec3 normal;
     float ao;
 } vs_out;
 
 void main() {
+    vs_out.fragPos = (u_Model * vec4(a_Position, 1.0)).xyz;
     vs_out.uv = a_UV;
     vs_out.normal = a_Normal;
     vs_out.ao = a_AO;

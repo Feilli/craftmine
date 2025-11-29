@@ -94,8 +94,8 @@ void AppLayer::OnUpdate(float deltaTime) {
     // update outline block
     UpdateBlockOutline();
 
-    // update sun
-    UpdateSun(deltaTime);
+    // update sun 
+    m_SkyBox.Update(deltaTime);
 
     // push events
     Core::Event positionUpdatedEvent = { 
@@ -110,6 +110,8 @@ void AppLayer::OnRender() {
     // rendering commands
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);   
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    m_SkyBox.Render(m_Camera);
 
     RenderChunks();
     RenderBlockOutline();
@@ -262,7 +264,7 @@ void AppLayer::RenderChunks() {
         std::shared_ptr<Chunk> chunk = m_ChunkManager->GetChunk(chunkKey.Chunk);
 
         if(chunk->Visible) {
-            chunk->RenderOpaqueMesh(m_Camera, m_Sun);
+            chunk->RenderOpaqueMesh(m_Camera, m_SkyBox);
         }
     }
 
@@ -273,7 +275,7 @@ void AppLayer::RenderChunks() {
         std::shared_ptr<Chunk> chunk = m_ChunkManager->GetChunk(chunkKey.Chunk);
 
         if(chunk->Visible) {
-            chunk->RenderTranslucentMesh(m_Camera, m_Sun);
+            chunk->RenderTranslucentMesh(m_Camera, m_SkyBox);
         }
     }
 
@@ -351,28 +353,6 @@ void AppLayer::RenderBlockOutline() {
     if(m_BlockOutline.Visible) {
         m_BlockOutline.BoundingBox.Render(m_Camera);
     }
-}
-
-void AppLayer::UpdateSun(float deltaTime) {
-    m_CurrentTime += deltaTime;
-    
-    if(m_CurrentTime > m_DayDuration) {
-        m_CurrentTime = 0.0f;
-    }
-
-    float time = std::fmod(m_CurrentTime, m_DayDuration);
-    float sunAngle = (time / m_DayDuration) * 2.0f * glm::pi<float>();
-
-    // move sun on a hemisphere
-    m_Sun.Direction = glm::normalize(glm::vec3(
-        cos(sunAngle),
-        sin(sunAngle),
-        0.0f
-    ));
-
-    // shift light color
-    m_Sun.AmbientColor = (m_Sun.Direction.y > 0.0f) ? glm::vec3(0.55f, 0.55f, 0.6f) : glm::vec3(0.2f, 0.2f, 0.25f);
-    m_Sun.Color = (m_Sun.Direction.y > 0.0f) ? glm::vec3(1.0f, 0.95f, 0.9f) : glm::vec3(0.15f, 0.2f, 0.3f);
 }
 
 // TODO: move to chunk manager

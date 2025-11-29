@@ -18,6 +18,8 @@ set(SOURCES
     Source/BoundingBox.cpp
     Source/Perlin.h
     Source/Perlin.cpp
+    Source/SkyBox.h
+    Source/SkyBox.cpp
 )
 
 add_executable(App)

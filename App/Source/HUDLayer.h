@@ -12,6 +12,8 @@ struct DebugInfo {
     int FPS = 0;
     glm::vec3 Position = glm::vec3(0.0f);
     glm::vec3 BlockHit = glm::vec3(0.0f);
+    float CurrentTime = 0.0f;
+    float DayDuration = 300.f;
 };
 
 class HUDLayer : public Core::Layer {
@@ -25,6 +27,7 @@ public:
     void OnPositionUpdatedEvent(glm::vec3 position);
     void OnBlockHitUpdatedEvent(glm::vec3 position);
 
+    void OnCurrenTimeUpdatedEvent(float currentTime, float dayDuration);
 private:
     Renderer::Quad m_Crosshair;
     Renderer::Font m_Font;

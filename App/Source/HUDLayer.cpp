@@ -31,6 +31,9 @@ HUDLayer::HUDLayer() :
             case Core::EventType::BlockHitUpdated:
                 this->OnBlockHitUpdatedEvent(event.Position);
                 break;
+            case Core::EventType::TimeUpdated:
+                this->OnCurrenTimeUpdatedEvent(event.CurrentTime, event.DayDuration);
+                break;
         }
     });
 }
@@ -62,6 +65,15 @@ void HUDLayer::OnRender() {
 
     std::string blockHit = std::format("x: {:10f}, y: {:10f}, z: {:10f}", m_DebugInfo.BlockHit.x, m_DebugInfo.BlockHit.y, m_DebugInfo.BlockHit.z);
     m_Font.RenderText(projection, blockHit, glm::vec2(-1.5f - 0.25f, 1.0f - 0.21f));
+
+    // Render current time
+    float realSeconds = (m_DebugInfo.CurrentTime / m_DebugInfo.DayDuration) * 60 * 60 * 24;
+
+    int hours = static_cast<int>(realSeconds) / 60 / 60;
+    int minutes = (static_cast<int>(realSeconds) % 3600) / 60;
+
+    std::string time = std::format("Time: {:02}:{:02}", hours, minutes);
+    m_Font.RenderText(projection, time, glm::vec2(-1.5f - 0.25f, 1.0f - 0.28f));
 }
 
 void HUDLayer::OnPositionUpdatedEvent(glm::vec3 position) {
@@ -70,4 +82,9 @@ void HUDLayer::OnPositionUpdatedEvent(glm::vec3 position) {
 
 void HUDLayer::OnBlockHitUpdatedEvent(glm::vec3 position) {
     m_DebugInfo.BlockHit = position;
+}
+
+void HUDLayer::OnCurrenTimeUpdatedEvent(float currentTime, float dayDuration) {
+    m_DebugInfo.CurrentTime = currentTime;
+    m_DebugInfo.DayDuration = dayDuration;
 }

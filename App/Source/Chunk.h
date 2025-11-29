@@ -7,7 +7,7 @@
 
 #include "Camera.h"
 #include "Perlin.h"
-#include "Lighting.h"
+#include "SkyBox.h"
 #include "Intersects.h"
 
 #include <glm/glm.hpp>
@@ -182,8 +182,8 @@ public:
     void ResetMesh();
     void BuildMesh();
 
-    void RenderOpaqueMesh(const Camera& camera, const Lighting::Sun& sun);
-    void RenderTranslucentMesh(const Camera& camera, const Lighting::Sun& sun);
+    void RenderOpaqueMesh(const Camera& camera, const SkyBox& skybox);
+    void RenderTranslucentMesh(const Camera& camera, const SkyBox& skybox);
 
     Intersects::AABB GetBoundingBox();
 

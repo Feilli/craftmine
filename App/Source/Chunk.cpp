@@ -224,7 +224,7 @@ void Chunk::BuildMesh() {
     m_State = ChunkState::MESHED;
 }
 
-void Chunk::RenderOpaqueMesh(const Camera& camera, const Lighting::Sun& sun) {
+void Chunk::RenderOpaqueMesh(const Camera& camera, const SkyBox& skybox) {
     if(m_OpaqueMesh.GetIndexCount() > 0) {
         // enable shader
         m_Shader->Use();
@@ -235,9 +235,14 @@ void Chunk::RenderOpaqueMesh(const Camera& camera, const Lighting::Sun& sun) {
         m_Shader->SetMat4("u_Model", glm::mat4(1.0f));
 
         // bind lighting uniforms
-        m_Shader->SetVec3("u_SunDirection", sun.Direction);
-        m_Shader->SetVec3("u_SunColor", sun.Color);
-        m_Shader->SetVec3("u_AmbientColor", sun.AmbientColor);
+        m_Shader->SetVec3("u_SunDirection", skybox.GetSunDirection());
+        m_Shader->SetVec3("u_SunColor", skybox.GetSunColor());
+        m_Shader->SetVec3("u_AmbientColor", skybox.GetAmbientColor());
+
+        // distance fog
+        m_Shader->SetVec3("u_CameraPosition", camera.GetPosition());
+        m_Shader->SetFloat("u_FogStart", 160.0f);
+        m_Shader->SetFloat("u_FogEnd", 176.0f);
 
         // bind texture atlas
         m_TextureAtlas->GetTexture()->Bind();
@@ -250,7 +255,7 @@ void Chunk::RenderOpaqueMesh(const Camera& camera, const Lighting::Sun& sun) {
     }
 }
 
-void Chunk::RenderTranslucentMesh(const Camera& camera, const Lighting::Sun& sun) {
+void Chunk::RenderTranslucentMesh(const Camera& camera, const SkyBox& skybox) {
     if(m_TranslucentMesh.GetIndexCount() > 0) {
         // enable shader
         m_Shader->Use();
@@ -261,9 +266,9 @@ void Chunk::RenderTranslucentMesh(const Camera& camera, const Lighting::Sun& sun
         m_Shader->SetMat4("u_Model", glm::mat4(1.0f));
 
         // bind lighting uniforms
-        m_Shader->SetVec3("u_SunDirection", sun.Direction);
-        m_Shader->SetVec3("u_SunColor", sun.Color);
-        m_Shader->SetVec3("u_AmbientColor", sun.AmbientColor);
+        m_Shader->SetVec3("u_SunDirection", skybox.GetSunDirection());
+        m_Shader->SetVec3("u_SunColor", skybox.GetSunColor());
+        m_Shader->SetVec3("u_AmbientColor", skybox.GetAmbientColor());
 
         // bind texture atlas
         m_TextureAtlas->GetTexture()->Bind();

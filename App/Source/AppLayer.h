@@ -6,9 +6,9 @@
 #include "Core/Renderer/Shader.h"
 
 #include "Camera.h"
-#include "Lighting.h"
 #include "ChunkManager.h"
 #include "BoundingBox.h"
+#include "SkyBox.h"
 
 #include <glm/glm.hpp>
 
@@ -31,7 +31,7 @@ private:
 
     std::shared_ptr<ChunkManager> m_ChunkManager;
 
-    int m_ViewDistance = 8;
+    int m_ViewDistance = 12;
 
     void UpdateChunks();
     void RenderChunks();
@@ -60,12 +60,7 @@ private:
     };
 
     BlockOutline m_BlockOutline;
- 
-    Lighting::Sun m_Sun;
-
-    // in seconds
-    float m_CurrentTime = 0.0f;
-    float m_DayDuration = 300.0f;
-
+    SkyBox m_SkyBox;
+    
     Camera m_Camera;
 };

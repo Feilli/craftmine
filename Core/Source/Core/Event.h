@@ -16,7 +16,10 @@ namespace Core {
 
         // HUD Events
         PositionUpdated,
-        BlockHitUpdated
+        BlockHitUpdated,
+
+        // Day/Night Cycle Events
+        TimeUpdated
     };
 
     // TODO: rewrite the event dispatcher
@@ -25,6 +28,8 @@ namespace Core {
         int Key = -1;
         int Mods = -1;
         glm::vec3 Position = glm::vec3(1.0f);
+        float CurrentTime = 0.0f;
+        float DayDuration = 300.0f;
     };
 
     class EventDispatcher {
