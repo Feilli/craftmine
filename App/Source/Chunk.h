@@ -162,8 +162,11 @@ struct VertexNeighbors {
 
 enum ChunkState {
     CREATED,
+    GENERATED,
     DECORATED,
-    MESHED
+    MESHED,
+    READY, // ready to load on GPU
+    LOADED
 };
 
 class ChunkManager;
@@ -181,6 +184,7 @@ public:
 
     void ResetMesh();
     void BuildMesh();
+    void LoadMesh();
 
     void RenderOpaqueMesh(const Camera& camera, const SkyBox& skybox);
     void RenderTranslucentMesh(const Camera& camera, const SkyBox& skybox);
@@ -193,6 +197,7 @@ public:
     BlockType GetBlockType(const glm::vec3& position);
     void SetBlockType(const glm::vec3 & position, const BlockType& type);
 
+    void SetState(const ChunkState& state);
     ChunkState GetState();
 public:
     bool Visible = false;
@@ -220,6 +225,15 @@ private:
     glm::vec3 m_Position;
 
     ChunkManager* m_ChunkManager;
+
+    struct MeshConfig {
+        std::vector<Renderer::Vertex> Vertices;
+        std::vector<uint32_t> Indices;
+        uint32_t IndexOffset = 0;
+    };
+
+    MeshConfig m_OpaqueMeshConfig;
+    MeshConfig m_TranslucentMeshConfig;
 
     Renderer::Mesh m_OpaqueMesh;
     Renderer::Mesh m_TranslucentMesh;

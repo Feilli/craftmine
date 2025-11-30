@@ -33,6 +33,7 @@ private:
 
     int m_ViewDistance = 12;
 
+    void SortChunks();
     void UpdateChunks();
     void RenderChunks();
 

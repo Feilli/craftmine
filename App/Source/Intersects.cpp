@@ -68,7 +68,7 @@ namespace Intersects {
         glm::vec3 localOrigin = glm::vec3(inverseModel * glm::vec4(rayOrigin, 1.0f));
         glm::vec3 localDirection = glm::normalize(glm::vec3(inverseModel * glm::vec4(rayDirection, 0.0f)));
 
-        float tMin = 10.f;
+        float tMin = 16.0f;
         FaceDirection hitDirection = FaceDirection::NO_FACE;
         glm::vec3 hitNormal(0.0f);
 

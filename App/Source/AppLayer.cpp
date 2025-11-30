@@ -58,27 +58,7 @@ void AppLayer::OnUpdate(float deltaTime) {
     UpdateChunks();
 
     // sort chunks from camera position
-    m_ChunksSorted.clear();
-
-    for(auto chunk = m_ChunkManager->ChunksBegin(); chunk != m_ChunkManager->ChunksEnd(); ++chunk) {
-        Intersects::AABB chunkBoundingBox = chunk->second->GetBoundingBox();
-        
-        glm::vec2 minBound = { chunkBoundingBox.MinBound.x, chunkBoundingBox.MinBound.z };
-        glm::vec2 maxBound = { chunkBoundingBox.MaxBound.x, chunkBoundingBox.MaxBound.z };
-
-        glm::vec2 center = (minBound + maxBound) * 0.5f;
-        glm::vec2 cameraPosition = { m_Camera.GetPosition().x, m_Camera.GetPosition().z };
-
-        // calculate squared distance between center of the chunk and camera
-        // we can actually cache it on chunks itself
-        glm::vec2 diff = center - cameraPosition;
-        float distance = glm::dot(diff, diff);
-
-        m_ChunksSorted.push_back({chunk->first, distance});
-    }
-
-    std::sort(m_ChunksSorted.begin(), m_ChunksSorted.end(),
-              [](auto& a, auto& b){ return a.Distance < b.Distance; });
+    SortChunks();
 
     // update chunk visibility
     Intersects::Frustum cameraFrustum = Intersects::GetFrustumFromViewProjectionMatrix(m_Camera.GetViewProjectionMatrix());
@@ -142,6 +122,7 @@ void AppLayer::OnMouseButtonEventHandler(const Core::Event& event) {
 
                     std::shared_ptr<Chunk> chunk = m_ChunkManager->GetChunk(newBlock.Chunk);
                     chunk->BuildMesh();
+                    chunk->LoadMesh();
                 }
             }
         }
@@ -157,6 +138,7 @@ void AppLayer::OnMouseButtonEventHandler(const Core::Event& event) {
 
             std::shared_ptr<Chunk> chunk = m_ChunkManager->GetChunk(removedBlock.Chunk);
             chunk->BuildMesh();
+            chunk->LoadMesh();
 
             // rebuild neighbors to avoid artifacts
             const glm::vec3 blockNeighbours[4] = {
@@ -173,18 +155,39 @@ void AppLayer::OnMouseButtonEventHandler(const Core::Event& event) {
                 if(neighborBlock.Chunk != removedBlock.Chunk) {
                     std::shared_ptr<Chunk> neighborChunk = m_ChunkManager->GetChunk(neighborBlock.Chunk);
                     neighborChunk->BuildMesh();
+                    neighborChunk->LoadMesh();
                 }
             }
         }
     }
 }
 
-void AppLayer::UpdateChunks() {
-    /*
-        We can create a mutex chunk queue,
-        which can be pulled from another thread to process it
-    */
+void AppLayer::SortChunks() {
+    // sort chunks based on distance from camera
+    m_ChunksSorted.clear();
 
+    for(auto chunk = m_ChunkManager->ChunksBegin(); chunk != m_ChunkManager->ChunksEnd(); ++chunk) {
+        Intersects::AABB chunkBoundingBox = chunk->second->GetBoundingBox();
+        
+        glm::vec2 minBound = { chunkBoundingBox.MinBound.x, chunkBoundingBox.MinBound.z };
+        glm::vec2 maxBound = { chunkBoundingBox.MaxBound.x, chunkBoundingBox.MaxBound.z };
+
+        glm::vec2 center = (minBound + maxBound) * 0.5f;
+        glm::vec2 cameraPosition = { m_Camera.GetPosition().x, m_Camera.GetPosition().z };
+
+        // calculate squared distance between center of the chunk and camera
+        // we can actually cache it on chunks itself
+        glm::vec2 diff = center - cameraPosition;
+        float distance = glm::dot(diff, diff);
+
+        m_ChunksSorted.push_back({chunk->first, distance});
+    }
+
+    std::sort(m_ChunksSorted.begin(), m_ChunksSorted.end(),
+              [](auto& a, auto& b){ return a.Distance < b.Distance; });
+}
+
+void AppLayer::UpdateChunks() {
     // scan which chunks we need to remove/add based on view distance
     glm::ivec2 cameraChunk = WorldToChunkCoordinate(m_Camera.GetPosition());
 
@@ -230,6 +233,7 @@ void AppLayer::UpdateChunks() {
     for(const auto& chunkKey : chunksCreated) {
         m_ChunkManager->CreateChunk(chunkKey);
 
+        // add neighbors to properly mesh the chunks
         glm::ivec2 neighbors[4] = {
             {  0,  1 },
             {  1,  0 },
@@ -242,17 +246,55 @@ void AppLayer::UpdateChunks() {
         }
     }
 
-    // decorate new chunks
     for(auto chunk = m_ChunkManager->ChunksBegin(); chunk != m_ChunkManager->ChunksEnd(); ++chunk) {
         if(chunk->second->GetState() == ChunkState::CREATED) {
-            chunk->second->GenerateDecorations();
+            ChunkJob job;
+            
+            job.Type = ChunkJobType::GENERATE;
+            job.Chunk = chunk->first;
+
+            m_ChunkManager->AddChunkJob(job);
+
+            chunk->second->SetState(ChunkState::GENERATED);
+        }
+    }
+
+    // decorate new chunks
+    for(auto chunk = m_ChunkManager->ChunksBegin(); chunk != m_ChunkManager->ChunksEnd(); ++chunk) {
+        if(chunk->second->GetState() == ChunkState::GENERATED) {
+            ChunkJob job;
+            
+            job.Type = ChunkJobType::DECORATE;
+            job.Chunk = chunk->first;
+
+            m_ChunkManager->AddChunkJob(job);
+
+            chunk->second->SetState(ChunkState::DECORATED);
         }
     }
 
     // build meshes for the new chunks (excluding neighbors built on the fly)
     for(const auto& chunkKey : chunksCreated) {
         std::shared_ptr<Chunk> chunk = m_ChunkManager->GetChunk(chunkKey);
-        chunk->BuildMesh();
+        
+        if(chunk->GetState() == ChunkState::DECORATED) {
+            ChunkJob job;
+            
+            job.Type = ChunkJobType::MESH;
+            job.Chunk = chunkKey;
+
+            m_ChunkManager->AddChunkJob(job);
+
+            chunk->SetState(ChunkState::MESHED);
+        }
+    }
+
+    // load meshed chunks on GPU
+    for(auto chunk = m_ChunkManager->ChunksBegin(); chunk != m_ChunkManager->ChunksEnd(); ++chunk) {
+        if(chunk->second->GetState() == ChunkState::READY) {
+            chunk->second->LoadMesh();
+            chunk->second->SetState(ChunkState::LOADED);
+        }
     }
 }
 

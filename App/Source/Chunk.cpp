@@ -158,28 +158,15 @@ void Chunk::GenerateDecorations() {
             }
         }
     }
-
-    m_State = ChunkState::DECORATED;
 }
 
 void Chunk::ResetMesh() {
     m_OpaqueMesh.Reset();
     m_TranslucentMesh.Reset();
-
-    BlockVisible.clear();
 }
 
 void Chunk::BuildMesh() {
-    ResetMesh();
-
-    struct MeshConfig {
-        std::vector<Renderer::Vertex> Vertices;
-        std::vector<uint32_t> Indices;
-        uint32_t IndexOffset = 0;
-    };
-
-    MeshConfig opaqueMesh;
-    MeshConfig translucentMesh;
+    BlockVisible.clear();
 
     for(int x = 0; x < s_ChunkSize; x++) {
         for(int y = 0; y < s_ChunkSize * s_ChunkSize; y++) {
@@ -195,21 +182,21 @@ void Chunk::BuildMesh() {
 
                 if(blockMesh.Visible) {
                     if(blockMesh.Type == BlockType::WATER || blockMesh.Type == BlockType::LEAVES) {
-                        translucentMesh.Vertices.insert(translucentMesh.Vertices.end(), blockMesh.Vertices.begin(), blockMesh.Vertices.end());
+                        m_TranslucentMeshConfig.Vertices.insert(m_TranslucentMeshConfig.Vertices.end(), blockMesh.Vertices.begin(), blockMesh.Vertices.end());
 
                         for(size_t i = 0; i < blockMesh.Indices.size(); i ++) {
-                            translucentMesh.Indices.push_back(translucentMesh.IndexOffset + blockMesh.Indices[i]);
+                            m_TranslucentMeshConfig.Indices.push_back(m_TranslucentMeshConfig.IndexOffset + blockMesh.Indices[i]);
                         }
 
-                        translucentMesh.IndexOffset += blockMesh.IndexOffset;
+                        m_TranslucentMeshConfig.IndexOffset += blockMesh.IndexOffset;
                     } else {
-                        opaqueMesh.Vertices.insert(opaqueMesh.Vertices.end(), blockMesh.Vertices.begin(), blockMesh.Vertices.end());
+                        m_OpaqueMeshConfig.Vertices.insert(m_OpaqueMeshConfig.Vertices.end(), blockMesh.Vertices.begin(), blockMesh.Vertices.end());
 
                         for(size_t i = 0; i < blockMesh.Indices.size(); i ++) {
-                            opaqueMesh.Indices.push_back(opaqueMesh.IndexOffset + blockMesh.Indices[i]);
+                            m_OpaqueMeshConfig.Indices.push_back(m_OpaqueMeshConfig.IndexOffset + blockMesh.Indices[i]);
                         }
 
-                        opaqueMesh.IndexOffset += blockMesh.IndexOffset;
+                        m_OpaqueMeshConfig.IndexOffset += blockMesh.IndexOffset;
                     }
                     
                     BlockVisible.push_back(position);
@@ -217,11 +204,22 @@ void Chunk::BuildMesh() {
             }
         }
     }
+}
 
-    m_OpaqueMesh.Build(opaqueMesh.Vertices, opaqueMesh.Indices);
-    m_TranslucentMesh.Build(translucentMesh.Vertices, translucentMesh.Indices);
+void Chunk::LoadMesh() {
+    ResetMesh();
 
-    m_State = ChunkState::MESHED;
+    m_OpaqueMesh.Build(m_OpaqueMeshConfig.Vertices, m_OpaqueMeshConfig.Indices);
+    m_TranslucentMesh.Build(m_TranslucentMeshConfig.Vertices, m_TranslucentMeshConfig.Indices);
+
+    // clean up
+    m_OpaqueMeshConfig.Vertices.clear();
+    m_OpaqueMeshConfig.Indices.clear();
+    m_OpaqueMeshConfig.IndexOffset = 0;
+
+    m_TranslucentMeshConfig.Vertices.clear();
+    m_TranslucentMeshConfig.Indices.clear();
+    m_TranslucentMeshConfig.IndexOffset = 0;
 }
 
 void Chunk::RenderOpaqueMesh(const Camera& camera, const SkyBox& skybox) {
@@ -312,6 +310,10 @@ BlockType Chunk::GetBlockType(const glm::vec3& position) {
 void Chunk::SetBlockType(const glm::vec3& position, const BlockType& type) {
     glm::ivec3 pos = glm::ivec3(position);
     m_BlockTypes[pos.x][pos.y][pos.z] = type;
+}
+
+void Chunk::SetState(const ChunkState& state) {
+    m_State = state;
 }
 
 ChunkState Chunk::GetState() {

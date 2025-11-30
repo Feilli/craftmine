@@ -9,7 +9,10 @@
 #include <glm/glm.hpp>
 
 #include <map>
+#include <queue>
+#include <thread>
 #include <memory>
+#include <condition_variable>
 
 struct ivec2_hash {
     std::size_t operator()(const glm::ivec2& v) const noexcept {
@@ -32,10 +35,23 @@ struct Block {
     glm::vec3 Position;
 };
 
+enum ChunkJobType {
+    GENERATE,
+    DECORATE,
+    MESH
+};
+
+struct ChunkJob {
+    ChunkJobType Type;
+    glm::ivec2 Chunk;
+};
+
 class ChunkManager {
 public:
     ChunkManager();
     ~ChunkManager();
+
+    void AddChunkJob(const ChunkJob& job);
 
     void CreateChunk(glm::ivec2 position);
     void DestroyChunk(glm::ivec2 position);
@@ -50,8 +66,18 @@ public:
     ChunkMapIterator ChunksBegin();
     ChunkMapIterator ChunksEnd();
 private:
+    void ChunkJobsWorker();
+private:
     std::shared_ptr<Renderer::TextureAtlas> m_TextureAtlas;
     std::shared_ptr<Renderer::Shader> m_ChunkShader;
 
     ChunkMap m_Chunks;
+private:
+    bool m_ChunkJobsWorkerRunning = true;
+    
+    std::thread m_ChunkJobsWorker;
+    std::queue<ChunkJob> m_ChunkJobs;
+
+    std::mutex m_ChunkJobsMutex;
+    std::condition_variable m_ChunkJobsSignal;
 };

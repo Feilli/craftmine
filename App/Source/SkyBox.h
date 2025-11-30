@@ -27,6 +27,6 @@ private:
     glm::vec3 m_SunDirection;
 
     // in seconds
-    float m_DayDuration = 60.0f;
+    float m_DayDuration = 300.0f;
     float m_CurrentTime = m_DayDuration / 2.0f;
 };

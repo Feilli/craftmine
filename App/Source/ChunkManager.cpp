@@ -6,10 +6,27 @@
 ChunkManager::ChunkManager() {
     m_TextureAtlas = std::make_shared<Renderer::TextureAtlas>("Textures/terrain.png", 16, 16);
     m_ChunkShader = std::make_shared<Renderer::Shader>("Shaders/ChunkVertex.glsl", "Shaders/ChunkFragment.glsl");
+
+    m_ChunkJobsWorker = std::thread(&ChunkManager::ChunkJobsWorker, this);
 }
 
 ChunkManager::~ChunkManager() {
+    m_ChunkJobsWorkerRunning = false;
+    
+    m_ChunkJobsSignal.notify_all();
 
+    if(m_ChunkJobsWorker.joinable()) {
+        m_ChunkJobsWorker.join();
+    }
+}
+
+void ChunkManager::AddChunkJob(const ChunkJob& job) {
+    {
+        std::lock_guard<std::mutex> lock(m_ChunkJobsMutex);
+        m_ChunkJobs.push(job);
+    }
+
+    m_ChunkJobsSignal.notify_one();
 }
 
 void ChunkManager::CreateChunk(glm::ivec2 position) {
@@ -20,7 +37,7 @@ void ChunkManager::CreateChunk(glm::ivec2 position) {
     m_Chunks[position] = std::make_shared<Chunk>(this, position, m_TextureAtlas, m_ChunkShader);
 
     m_Chunks[position]->SetPosition({ position.x * Chunk::s_ChunkSize, 0, position.y * Chunk::s_ChunkSize });
-    m_Chunks[position]->Generate();
+    // m_Chunks[position]->Generate();
 }
 
 void ChunkManager::DestroyChunk(glm::ivec2 position) {
@@ -73,4 +90,37 @@ ChunkMapIterator ChunkManager::ChunksBegin() {
 
 ChunkMapIterator ChunkManager::ChunksEnd() {
     return m_Chunks.end();
+}
+
+void ChunkManager::ChunkJobsWorker() {
+    while(m_ChunkJobsWorkerRunning) {
+        ChunkJob job;
+
+        {
+            std::unique_lock<std::mutex> lock(m_ChunkJobsMutex);
+            m_ChunkJobsSignal.wait(lock, [this] { return !m_ChunkJobs.empty() || ! m_ChunkJobsWorkerRunning; });
+
+            if(!m_ChunkJobsWorkerRunning) {
+                break;
+            }
+
+            job = m_ChunkJobs.front();
+            m_ChunkJobs.pop();
+        }
+
+        std::shared_ptr<Chunk> chunk = GetChunk(job.Chunk);
+
+        switch(job.Type) {
+            case ChunkJobType::GENERATE:
+                chunk->Generate();
+                break;
+            case ChunkJobType::DECORATE:
+                chunk->GenerateDecorations();
+                break;
+            case ChunkJobType::MESH:
+                chunk->BuildMesh();
+                chunk->SetState(ChunkState::READY);
+                break;
+        }
+    }
 }
