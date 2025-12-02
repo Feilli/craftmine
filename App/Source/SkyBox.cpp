@@ -95,13 +95,13 @@ void SkyBox::Update(float deltaTime) {
     m_SunColor = glm::mix(moonColor, sunColor, -cos(sunAngle) / 2.0f + 0.5f);
 
     // push event
-    Core::Event event;
+    // Core::Event event;
 
-    event.Type = Core::EventType::TimeUpdated;
-    event.CurrentTime = m_CurrentTime;
-    event.DayDuration = m_DayDuration;
+    // event.Type = Core::EventType::TimeUpdated;
+    // event.CurrentTime = m_CurrentTime;
+    // event.DayDuration = m_DayDuration;
 
-    Core::Application::Get().GetEventDispatcher()->PushEvent(event);
+    // Core::Application::Get().GetEventDispatcher()->PushEvent(event);
 }
 
 void SkyBox::Render(const Camera& camera) {

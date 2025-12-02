@@ -1,25 +1,33 @@
 #include "Application.h"
 
-#include <glm/glm.hpp>
-
 #include <assert.h>
-#include <print>
+#include <iostream>
+#include <ranges>
 
 namespace Core {
 
     static Application* s_App = nullptr;
+
+    static void GLFWErrorCallback(int error, const char* description) {
+        std::cerr << "[GLFW Error]: " << description << std::endl;
+    }
 
     Application::Application(const ApplicationParams& params) 
         : m_Params(params) {
         s_App = this;
 
         // init GLFW
+        glfwSetErrorCallback(GLFWErrorCallback);
         glfwInit();
 
-        m_Window = std::make_shared<Window>(params.WindowParams);
-        m_Window->Create();
+        if(m_Params.WindowParams.Title.empty()) {
+            m_Params.WindowParams.Title = m_Params.Name;
+        }
 
-        m_EventDispatcher = std::make_shared<EventDispatcher>();
+        m_Params.WindowParams.EventCallback = [this](Event& event) { RaiseEvent(event); };
+
+        m_Window = std::make_shared<Window>(m_Params.WindowParams);
+        m_Window->Create();
     }
 
     Application::~Application() {
@@ -27,18 +35,14 @@ namespace Core {
 
         // terminate GLFW
         glfwTerminate();
+
+        s_App = nullptr;
     }
 
     void Application::Run() {
         m_Running = true;
 
         float lastFrameTIme = GetTime();
-
-        // register GLFW event callbacks
-        glfwSetWindowUserPointer(m_Window->GetHandle(), s_App);
-
-        glfwSetKeyCallback(m_Window->GetHandle(), OnSetKeyCallback);
-        glfwSetMouseButtonCallback(m_Window->GetHandle(), OnSetMouseButtonCallback);
 
         int tickCount = 0;
         float tickTime = 0;
@@ -54,9 +58,6 @@ namespace Core {
             float currentFrameTime = GetTime();
             float deltaTime = glm::clamp(currentFrameTime - lastFrameTIme, 0.001f, 0.1f);
             lastFrameTIme = currentFrameTime;
-
-            // dispatch events to layers
-            m_EventDispatcher->Dispatch();
 
             // Update layers
             for(const std::unique_ptr<Layer>& layer: m_LayerStack)
@@ -84,16 +85,18 @@ namespace Core {
         m_Running = false;
     }
 
+    void Application::RaiseEvent(Event& event) {
+        for(auto& layer : std::views::reverse(m_LayerStack)) {
+            layer->OnEvent(event);
+
+            if(event.Handled) {
+                break;
+            }
+        }
+    }
+
     std::shared_ptr<Window> Application::GetWindow() {
         return m_Window;
-    }
-
-    std::shared_ptr<EventDispatcher> Application::GetEventDispatcher() {
-        return m_EventDispatcher;
-    }
-
-    glm::vec2 Application::GetCursorPos() const {
-        return m_Window->GetCursorPos();
     }
 
     glm::vec2 Application::GetFrameBufferSize() const {
@@ -112,25 +115,4 @@ namespace Core {
     float Application::GetTime() {
         return (float)glfwGetTime();
     }
-
-    void Application::OnSetKeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
-        Application* application = static_cast<Application*>(glfwGetWindowUserPointer(window));
-
-        if(action == GLFW_PRESS) {
-            application->GetEventDispatcher()->PushEvent({ EventType::KeyPressed, key, mods });
-        } else if(action == GLFW_RELEASE) {
-            application->GetEventDispatcher()->PushEvent({ EventType::KeyReleased, key, mods });
-        }
-    }
-
-    void Application::OnSetMouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
-        Application* application = static_cast<Application*>(glfwGetWindowUserPointer(window));
-
-        if(action == GLFW_PRESS) {
-            application->GetEventDispatcher()->PushEvent({ EventType::MouseButtonPressed, button, mods });
-        } else if(action == GLFW_RELEASE) {
-            application->GetEventDispatcher()->PushEvent({ EventType::MouseButtonReleased, button, mods });
-        }
-    }
-
 }

@@ -9,7 +9,8 @@ set(SOURCES
     Source/Core/Window.cpp
     Source/Core/Layer.h
     Source/Core/Event.h
-    Source/Core/Event.cpp
+    Source/Core/WindowEvents.h
+    Source/Core/InputEvents.h
     Source/Core/Renderer/Texture.h
     Source/Core/Renderer/Texture.cpp
     Source/Core/Renderer/TextureAtlas.h

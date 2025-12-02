@@ -8,22 +8,15 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 Camera::Camera() {
+
 }
 
 Camera::~Camera() {
 }
 
 void Camera::Update(float deltaTime) {
-    glm::vec2 cursorPos = Core::Application::Get().GetCursorPos();
     glm::vec2 frameBufferSize = Core::Application::Get().GetFrameBufferSize();
-
-    m_Yaw -= m_MouseSensitivity * (frameBufferSize.x / 2 - cursorPos.x);
-    m_Pitch += m_MouseSensitivity * (frameBufferSize.y / 2 - cursorPos.y);
-
-    // clamp the pitch
-    if(m_Pitch > 89.0f) m_Pitch = 89.0f;
-    if(m_Pitch < -89.0f ) m_Pitch = -89.0f;
-
+    
     // compute camera vectors
     m_Front = glm::normalize(glm::vec3(
         cos(glm::radians(m_Yaw)) * cos(glm::radians(m_Pitch)),
@@ -45,21 +38,12 @@ void Camera::Update(float deltaTime) {
 void Camera::UpdatePosition(float deltaTime) {
     float velocity = m_Speed * deltaTime;
 
-    // this is a dirty way to do it
-    // I am not sure if dispatching an event is any better that this
-    if(glfwGetKey(Core::Application::Get().GetWindow()->GetHandle(), GLFW_KEY_W) == GLFW_PRESS) {
-        m_Position += m_Front * velocity;
-    } else if(glfwGetKey(Core::Application::Get().GetWindow()->GetHandle(), GLFW_KEY_S) == GLFW_PRESS) {
-        m_Position -= m_Front * velocity;
-    } else if(glfwGetKey(Core::Application::Get().GetWindow()->GetHandle(), GLFW_KEY_A) == GLFW_PRESS) {
-        m_Position -= m_Right * velocity;
-    } else if(glfwGetKey(Core::Application::Get().GetWindow()->GetHandle(), GLFW_KEY_D) == GLFW_PRESS) {
-        m_Position += m_Right * velocity;
-    } else if(glfwGetKey(Core::Application::Get().GetWindow()->GetHandle(), GLFW_KEY_SPACE) == GLFW_PRESS) {
-        m_Position += m_Up * velocity;
-    } else if(glfwGetKey(Core::Application::Get().GetWindow()->GetHandle(), GLFW_KEY_X) == GLFW_PRESS) {
-        m_Position -= m_Up * velocity;
-    }
+    if(ControlsActive[GLFW_KEY_W]) m_Position += m_Front * velocity;
+    if(ControlsActive[GLFW_KEY_S]) m_Position -= m_Front * velocity;
+    if(ControlsActive[GLFW_KEY_A]) m_Position -= glm::normalize(glm::cross(m_Front, m_Up)) * velocity;
+    if(ControlsActive[GLFW_KEY_D]) m_Position += glm::normalize(glm::cross(m_Front, m_Up)) * velocity;
+    if(ControlsActive[GLFW_KEY_X]) m_Position -= m_Up * velocity;
+    if(ControlsActive[GLFW_KEY_SPACE]) m_Position += m_Up * velocity;
 }
 
 glm::vec3 Camera::GetPosition() const {
@@ -78,9 +62,25 @@ glm::mat4 Camera::GetProjectionMatrix() const {
     return m_ProjectionMatrix;
 }
 
+float Camera::GetYaw() const {
+    return m_Yaw;
+}
+
+void Camera::SetYaw(float angle) {
+    m_Yaw = angle;
+}
+
+float Camera::GetPitch() const {
+    return m_Pitch;
+}
+
+void Camera::SetPitch(float angle) {
+    m_Pitch = angle;
+}
+
 glm::vec3 Camera::CastRay() {
     // cast ray from the camera center
-    glm::vec2 cursorPos = Core::Application::Get().GetCursorPos();
+    glm::vec2 cursorPos = Core::Application::Get().GetWindow()->GetCursorPos();
     glm::vec2 frameBufferSize = Core::Application::Get().GetFrameBufferSize();
 
     // normalize

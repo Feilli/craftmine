@@ -29,31 +29,51 @@ void ChunkManager::AddChunkJob(const ChunkJob& job) {
     m_ChunkJobsSignal.notify_one();
 }
 
-void ChunkManager::CreateChunk(glm::ivec2 position) {
-    if(m_Chunks.contains(position)) {
-        return;
+std::shared_ptr<Chunk> ChunkManager::CreateChunk(glm::ivec2 position) {
+    if(ChunkExists(position)) {
+        return nullptr;
     }
 
-    m_Chunks[position] = std::make_shared<Chunk>(this, position, m_TextureAtlas, m_ChunkShader);
+    std::shared_ptr<Chunk> chunk = std::make_shared<Chunk>(this, position, m_TextureAtlas, m_ChunkShader);
+    chunk->SetPosition({ position.x * Chunk::s_ChunkSize, 0, position.y * Chunk::s_ChunkSize });
 
-    m_Chunks[position]->SetPosition({ position.x * Chunk::s_ChunkSize, 0, position.y * Chunk::s_ChunkSize });
-    // m_Chunks[position]->Generate();
+    {
+        std::lock_guard<std::mutex> lock(m_ChunksMutex);
+        m_Chunks[position] = chunk;
+    }
+
+    return chunk;
 }
 
 void ChunkManager::DestroyChunk(glm::ivec2 position) {
-    m_Chunks.erase(position);
+    {
+        std::lock_guard<std::mutex> lock(m_ChunksMutex);
+        m_Chunks.erase(position);
+    }
 }
 
-bool ChunkManager::ChunkExists(glm::ivec2 position) const {
-    return m_Chunks.contains(position);
+bool ChunkManager::ChunkExists(glm::ivec2 position) {
+    bool exists = false;
+
+    {
+        std::lock_guard<std::mutex> lock(m_ChunksMutex);
+        exists = m_Chunks.contains(position);
+    }
+
+    return exists;
 }
 
 std::shared_ptr<Chunk> ChunkManager::GetChunk(glm::ivec2 position) {
+    std::shared_ptr<Chunk> chunk = nullptr;
+
     if(ChunkExists(position)) {
-        return m_Chunks[position];
+        {
+            std::lock_guard<std::mutex> lock(m_ChunksMutex);
+            chunk = m_Chunks[position];
+        }
     }
 
-    return nullptr;
+    return chunk;
 }
 
 Block ChunkManager::GetBlock(glm::vec3 position) {
@@ -67,7 +87,7 @@ Block ChunkManager::GetBlock(glm::vec3 position) {
     glm::ivec2 chunk = { chunkPosition.x, chunkPosition.z };
 
     if(ChunkExists(chunk)) {
-        block.Type = m_Chunks[chunk]->GetBlockType(localPosition);
+        block.Type = GetChunk(chunk)->GetBlockType(localPosition);
     }
 
     block.Position = position;
@@ -79,8 +99,7 @@ Block ChunkManager::GetBlock(glm::vec3 position) {
 
 void ChunkManager::CreateBlock(const Block& block) {
     if(ChunkExists(block.Chunk)) {
-        std::shared_ptr<Chunk> chunk = m_Chunks[block.Chunk];
-        chunk->SetBlockType(block.ChunkPosition, block.Type);
+        GetChunk(block.Chunk)->SetBlockType(block.ChunkPosition, block.Type);
     }
 }
 
@@ -107,20 +126,24 @@ void ChunkManager::ChunkJobsWorker() {
             job = m_ChunkJobs.front();
             m_ChunkJobs.pop();
         }
-
-        std::shared_ptr<Chunk> chunk = GetChunk(job.Chunk);
-
+        
         switch(job.Type) {
             case ChunkJobType::GENERATE:
-                chunk->Generate();
+            {
+                job.Chunk->Generate();
                 break;
+            }
             case ChunkJobType::DECORATE:
-                chunk->GenerateDecorations();
+            {
+                job.Chunk->GenerateDecorations();
                 break;
+            }
             case ChunkJobType::MESH:
-                chunk->BuildMesh();
-                chunk->SetState(ChunkState::READY);
+            {
+                job.Chunk->BuildMesh();
+                job.Chunk->SetState(ChunkState::READY);
                 break;
+            }
         }
     }
 }

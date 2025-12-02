@@ -1,51 +1,51 @@
 #pragma once
 
-#include <glm/glm.hpp>
-
-#include <queue>
+#include <string>
 #include <functional>
-#include <vector>
 
 namespace Core {
 
     enum EventType {
-        KeyPressed,
-        KeyReleased,
-        MouseButtonPressed,
-        MouseButtonReleased,
-
-        // HUD Events
-        PositionUpdated,
-        BlockHitUpdated,
-
-        // Day/Night Cycle Events
-        TimeUpdated
+        None = 0,
+        WindowClose, WindowResize,
+        KeyPressed, KeyReleased,
+        MouseButtonPressed, MouseButtonReleased, MouseMoved, MouseScrolled,
+        PositionUpdated, BlockHitUpdated, TimeUpdated
     };
 
-    // TODO: rewrite the event dispatcher
-    struct Event {
-        EventType Type = EventType::KeyPressed;
-        int Key = -1;
-        int Mods = -1;
-        glm::vec3 Position = glm::vec3(1.0f);
-        float CurrentTime = 0.0f;
-        float DayDuration = 300.0f;
+#define EVENT_CLASS_TYPE(type) static EventType GetStaticType() { return EventType::type; }\
+                                virtual EventType GetEventType() const override { return GetStaticType(); }\
+                                virtual const char* GetName() const override { return #type; }
+
+    class Event {
+    public:
+        bool Handled = false;
+        
+        virtual ~Event() {}
+        virtual EventType GetEventType() const = 0;
+        virtual const char* GetName() const = 0;
+        virtual std::string ToString() const { return GetName(); }
     };
 
     class EventDispatcher {
+        template<typename T>
+        using EventFn = std::function<bool(T&)>;
     public:
-        using Listener = std::function<void(const Event&)>;
+        EventDispatcher(Event& event)
+            : m_Event(event) {}
 
-        EventDispatcher();
-        ~EventDispatcher();
+        template<typename T>
+        bool Dispatch(EventFn<T> func) {
+            if(m_Event.GetEventType() == T::GetStaticType() && !m_Event.Handled) {
+                m_Event.Handled = func(*(T*)&m_Event);
+                return true;
+            }
 
-        void PushEvent(const Event& event);
-        void AddListener(const Listener& listener);
-        void Dispatch();
+            return false;
+        }
 
     private:
-        std::queue<Event> m_EventQueue;
-        std::vector<Listener> m_Listeners;
+        Event& m_Event;
     };
 
 }

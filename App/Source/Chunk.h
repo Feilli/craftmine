@@ -166,10 +166,12 @@ enum ChunkState {
     DECORATED,
     MESHED,
     READY, // ready to load on GPU
-    LOADED
+    LOADED,
+    REMOVED
 };
 
 class ChunkManager;
+struct Block;
 
 class Chunk {
 public:
@@ -190,6 +192,9 @@ public:
     void RenderTranslucentMesh(const Camera& camera, const SkyBox& skybox);
 
     Intersects::AABB GetBoundingBox();
+
+    Block GetBlock(const glm::vec3& position);
+    bool BlockInside(const glm::vec3& position);
 
     glm::vec3 GetPosition();
     void SetPosition(const glm::vec3& position);

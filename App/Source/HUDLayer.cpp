@@ -22,20 +22,6 @@ HUDLayer::HUDLayer() :
     m_Crosshair.SetTexture(crosshairTexture);
 
     m_Crosshair.SetScale(glm::vec3(0.1f, 0.1f, 0.0f));
-
-    Core::Application::Get().GetEventDispatcher()->AddListener([this](const Core::Event& event) {
-        switch(event.Type) {
-            case Core::EventType::PositionUpdated:
-                this->OnPositionUpdatedEvent(event.Position);
-                break;
-            case Core::EventType::BlockHitUpdated:
-                this->OnBlockHitUpdatedEvent(event.Position);
-                break;
-            case Core::EventType::TimeUpdated:
-                this->OnCurrenTimeUpdatedEvent(event.CurrentTime, event.DayDuration);
-                break;
-        }
-    });
 }
 
 HUDLayer::~HUDLayer() {

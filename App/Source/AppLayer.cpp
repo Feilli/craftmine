@@ -31,23 +31,18 @@ AppLayer::AppLayer() {
     glCullFace(GL_BACK);
 
     glFrontFace(GL_CCW);
-
-    // subscribe for mouse and keyboard events
-    // I think there is a smarter way to sub for those events
-    Core::Application::Get().GetEventDispatcher()->AddListener([this](const Core::Event& event) {
-        switch(event.Type) {
-            case Core::EventType::KeyPressed:
-                this->OnKeyEventHandler(event);
-                break;
-            case Core::EventType::MouseButtonPressed:
-            case Core::EventType::MouseButtonReleased:
-                this->OnMouseButtonEventHandler(event);
-                break;
-        }
-    });
 }
 
 AppLayer::~AppLayer() {
+}
+
+void AppLayer::OnEvent(Core::Event& event) {
+    Core::EventDispatcher dispatcher(event);
+
+    dispatcher.Dispatch<Core::KeyPressedEvent>([this](Core::KeyPressedEvent& e) { return OnKeyPressed(e); });
+    dispatcher.Dispatch<Core::KeyReleasedEvent>([this](Core::KeyReleasedEvent& e) { return OnKeyRelease(e); });
+    dispatcher.Dispatch<Core::MouseButtonPressedEvent>([this](Core::MouseButtonPressedEvent& e) { return OnMouseButtonPressed(e); });
+    dispatcher.Dispatch<Core::MouseMovedEvent>([this](Core::MouseMovedEvent& e) { return OnMouseMoved(e); });
 }
 
 void AppLayer::OnUpdate(float deltaTime) {
@@ -78,12 +73,12 @@ void AppLayer::OnUpdate(float deltaTime) {
     m_SkyBox.Update(deltaTime);
 
     // push events
-    Core::Event positionUpdatedEvent = { 
-        .Type = Core::EventType::PositionUpdated, 
-        .Position = m_Camera.GetPosition()  
-    };
+    // Core::Event positionUpdatedEvent = { 
+    //     .Type = Core::EventType::PositionUpdated, 
+    //     .Position = m_Camera.GetPosition()  
+    // };
 
-    Core::Application::Get().GetEventDispatcher()->PushEvent(positionUpdatedEvent);
+    // Core::Application::Get().GetEventDispatcher()->PushEvent(positionUpdatedEvent);
 }
 
 void AppLayer::OnRender() {
@@ -97,12 +92,26 @@ void AppLayer::OnRender() {
     RenderBlockOutline();
 }
 
-void AppLayer::OnKeyEventHandler(const Core::Event& event) {
-    std::println("Handling keyboard event: {}", event.Key);
+bool AppLayer::OnKeyPressed(const Core::KeyPressedEvent& event) {
+    // update camera controls
+    if(m_Camera.ControlsActive.contains(event.GetKeyCode())) {
+        m_Camera.ControlsActive[event.GetKeyCode()] = true;
+    }
+
+    return false;
 }
 
-void AppLayer::OnMouseButtonEventHandler(const Core::Event& event) {
-    if(event.Type == Core::EventType::MouseButtonReleased && event.Key == GLFW_MOUSE_BUTTON_LEFT) {
+bool AppLayer::OnKeyRelease(const Core::KeyReleasedEvent& event) {
+    // update camera controls
+    if(m_Camera.ControlsActive.contains(event.GetKeyCode())) {
+        m_Camera.ControlsActive[event.GetKeyCode()] = false;
+    }
+
+    return false;
+}
+
+bool AppLayer::OnMouseButtonPressed(const Core::MouseButtonPressedEvent& event) {
+    if(event.GetMouseButton() == GLFW_MOUSE_BUTTON_LEFT) {
         if(m_BlockOutline.Visible) {
             glm::vec3 cameraRay = m_Camera.CastRay();
 
@@ -128,7 +137,7 @@ void AppLayer::OnMouseButtonEventHandler(const Core::Event& event) {
         }
     }
 
-    if(event.Type == Core::EventType::MouseButtonReleased && event.Key == GLFW_MOUSE_BUTTON_RIGHT) {
+    if(event.GetMouseButton() == GLFW_MOUSE_BUTTON_RIGHT) {
         if(m_BlockOutline.Visible) {
             Block removedBlock = m_ChunkManager->GetBlock(m_BlockOutline.Position);
             
@@ -160,6 +169,26 @@ void AppLayer::OnMouseButtonEventHandler(const Core::Event& event) {
             }
         }
     }
+
+    return false;
+}
+
+bool AppLayer::OnMouseMoved(const Core::MouseMovedEvent& event) {
+    // update camera
+    float mouseSensitivity = 0.1f;
+    glm::vec2 frameBufferSize = Core::Application::Get().GetFrameBufferSize();
+
+    float yaw = m_Camera.GetYaw() - mouseSensitivity * (frameBufferSize.x / 2 - event.GetX());
+    float pitch = m_Camera.GetPitch() + mouseSensitivity * (frameBufferSize.y / 2 - event.GetY());
+
+    // clamp the pitch
+    if(pitch > 89.0f) pitch = 89.0f;
+    if(pitch < -89.0f ) pitch = -89.0f;
+
+    m_Camera.SetYaw(yaw);
+    m_Camera.SetPitch(pitch);
+
+    return false;
 }
 
 void AppLayer::SortChunks() {
@@ -188,12 +217,16 @@ void AppLayer::SortChunks() {
 }
 
 void AppLayer::UpdateChunks() {
+    // check timing
+    float startTime = Core::Application::GetTime();
+    float endTime = 0;
+
     // scan which chunks we need to remove/add based on view distance
     glm::ivec2 cameraChunk = WorldToChunkCoordinate(m_Camera.GetPosition());
 
     // remove chunks out of view distance
     std::vector<glm::ivec2> chunksRemoved;
-    chunksRemoved.reserve(m_ViewDistance);
+    chunksRemoved.reserve(m_ViewDistance * m_ViewDistance * 4);
 
     for(auto chunk = m_ChunkManager->ChunksBegin(); chunk != m_ChunkManager->ChunksEnd(); ++chunk) {
         float distance = glm::length(glm::vec2(chunk->first - cameraChunk));
@@ -203,85 +236,72 @@ void AppLayer::UpdateChunks() {
         }
     }
 
-    for(const auto& chunk : chunksRemoved) {
-        m_ChunkManager->DestroyChunk(chunk);
+    for(const auto& chunkKey : chunksRemoved) {
+        m_ChunkManager->DestroyChunk(chunkKey);
     }
 
-    // generate chunks
-    std::vector<glm::ivec2> chunksCreated;
-    chunksCreated.reserve(m_ViewDistance);
+    // create chunks
+    std::vector<std::shared_ptr<Chunk>> chunksCreated;
+    chunksCreated.reserve(m_ViewDistance * m_ViewDistance * 4);
 
+    const glm::ivec2 chunkNeighbors[4] = {
+        {  0,  1 },
+        {  1,  0 },
+        {  0, -1 },
+        { -1,  0 }
+    };
+
+    // in first pass, we make sure that all the necessary chunks are there
     for(int x = -m_ViewDistance; x <= m_ViewDistance; x++) {
         for(int y = -m_ViewDistance; y <= m_ViewDistance; y++) {
             glm::ivec2 chunkPosition = cameraChunk + glm::ivec2(x, y);
             float distance = glm::length(glm::vec2(chunkPosition - cameraChunk));
 
-            if(distance <= m_ViewDistance && !m_ChunkManager->ChunkExists(chunkPosition)) {
-                chunksCreated.push_back(chunkPosition);
-            }
+            if(distance <= m_ViewDistance) {
+                if(m_ChunkManager->ChunkExists(chunkPosition)) {
+                    std::shared_ptr<Chunk> chunk = m_ChunkManager->GetChunk(chunkPosition);
 
-            if(distance <= m_ViewDistance && m_ChunkManager->ChunkExists(chunkPosition)) {
-                std::shared_ptr<Chunk> chunk = m_ChunkManager->GetChunk(chunkPosition);
+                    if(chunk->GetState() == ChunkState::CREATED) {
+                        chunk->SetState(ChunkState::DECORATED);
 
-                if(chunk->GetState() == ChunkState::DECORATED) {
-                    chunksCreated.push_back(chunkPosition);
+                        chunksCreated.push_back(chunk);
+                    }
+                } else {
+                    std::shared_ptr<Chunk> chunk = m_ChunkManager->CreateChunk(chunkPosition);
+
+                    chunk->Generate();
+                    chunk->GenerateDecorations();
+                    chunk->SetState(ChunkState::DECORATED);
+
+                    chunksCreated.push_back(chunk);
+                }
+
+                // we do not need to mesh neighbors so we do not push it to the vector
+                for(size_t i = 0; i < 4; i++) {
+                    std::shared_ptr<Chunk> neighbor = m_ChunkManager->CreateChunk(chunkPosition + chunkNeighbors[i]);
+
+                    if(neighbor && neighbor->GetState() == ChunkState::CREATED) {
+                        neighbor->Generate();
+                        neighbor->GenerateDecorations();
+                    }
                 }
             }
         }
     }
 
-    for(const auto& chunkKey : chunksCreated) {
-        m_ChunkManager->CreateChunk(chunkKey);
+    endTime = Core::Application::GetTime();
 
-        // add neighbors to properly mesh the chunks
-        glm::ivec2 neighbors[4] = {
-            {  0,  1 },
-            {  1,  0 },
-            {  0, -1 },
-            { -1,  0 }
-        };
-
-        for(size_t i = 0; i < 4; i++) {
-            m_ChunkManager->CreateChunk(chunkKey + neighbors[i]);
-        }
+    if(chunksCreated.size() > 0) {
+        std::println("Generated {} chunks in {} seconds.", chunksCreated.size(), (endTime - startTime));
     }
 
-    for(auto chunk = m_ChunkManager->ChunksBegin(); chunk != m_ChunkManager->ChunksEnd(); ++chunk) {
-        if(chunk->second->GetState() == ChunkState::CREATED) {
-            ChunkJob job;
-            
-            job.Type = ChunkJobType::GENERATE;
-            job.Chunk = chunk->first;
-
-            m_ChunkManager->AddChunkJob(job);
-
-            chunk->second->SetState(ChunkState::GENERATED);
-        }
-    }
-
-    // decorate new chunks
-    for(auto chunk = m_ChunkManager->ChunksBegin(); chunk != m_ChunkManager->ChunksEnd(); ++chunk) {
-        if(chunk->second->GetState() == ChunkState::GENERATED) {
-            ChunkJob job;
-            
-            job.Type = ChunkJobType::DECORATE;
-            job.Chunk = chunk->first;
-
-            m_ChunkManager->AddChunkJob(job);
-
-            chunk->second->SetState(ChunkState::DECORATED);
-        }
-    }
-
-    // build meshes for the new chunks (excluding neighbors built on the fly)
-    for(const auto& chunkKey : chunksCreated) {
-        std::shared_ptr<Chunk> chunk = m_ChunkManager->GetChunk(chunkKey);
-        
+    // // build meshes for the new chunks (excluding neighbors built on the fly)
+    for(const auto& chunk : chunksCreated) {
         if(chunk->GetState() == ChunkState::DECORATED) {
             ChunkJob job;
             
             job.Type = ChunkJobType::MESH;
-            job.Chunk = chunkKey;
+            job.Chunk = chunk;
 
             m_ChunkManager->AddChunkJob(job);
 
@@ -333,16 +353,18 @@ void AppLayer::UpdateBlockOutline() {
 
     const float viewDistanceSquared = Chunk::s_ChunkSize * Chunk::s_ChunkSize * 4;
 
-    for(const auto& chunk : m_ChunksSorted) {
-        if(!m_ChunkManager->GetChunk(chunk.Chunk)->Visible) {
+    for(const auto& chunkDistance : m_ChunksSorted) {
+        std::shared_ptr<Chunk> chunk = m_ChunkManager->GetChunk(chunkDistance.Chunk);
+
+        if(!chunk->Visible) {
             continue;
         }
 
-        if(chunk.Distance > viewDistanceSquared) {
+        if(chunkDistance.Distance > viewDistanceSquared) {
             continue;
         }
 
-        for(const auto& blockPosition : m_ChunkManager->GetChunk(chunk.Chunk)->BlockVisible) {
+        for(const auto& blockPosition : chunk->BlockVisible) {
             Block block = m_ChunkManager->GetBlock(blockPosition);
 
             if(block.Type == BlockType::AIR || block.Type == BlockType::WATER) {
@@ -362,7 +384,7 @@ void AppLayer::UpdateBlockOutline() {
 
                 m_BlockOutline.Visible = true;
 
-                m_BlockOutline.Chunk = chunk.Chunk;
+                m_BlockOutline.Chunk = chunkDistance.Chunk;
                 m_BlockOutline.Position = block.Position;
             }
         }
@@ -382,12 +404,12 @@ void AppLayer::UpdateBlockOutline() {
         m_BlockOutline.BoundingBox.SetPosition(m_BlockOutline.Position);
         m_BlockOutline.BoundingBox.Update();
 
-        Core::Event blockHitUpdatedEvent = { 
-            .Type = Core::EventType::BlockHitUpdated, 
-            .Position = m_BlockOutline.Position
-        };
+        // Core::Event blockHitUpdatedEvent = { 
+        //     .Type = Core::EventType::BlockHitUpdated, 
+        //     .Position = m_BlockOutline.Position
+        // };
 
-        Core::Application::Get().GetEventDispatcher()->PushEvent(blockHitUpdatedEvent);
+        // Core::Application::Get().GetEventDispatcher()->PushEvent(blockHitUpdatedEvent);
     }
 }
 

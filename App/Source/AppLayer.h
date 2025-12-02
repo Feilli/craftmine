@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Core/Layer.h"
-#include "Core/Event.h"
+#include "Core/InputEvents.h"
 #include "Core/Renderer/TextureAtlas.h"
 #include "Core/Renderer/Shader.h"
 
@@ -20,11 +20,15 @@ public:
     AppLayer();
     virtual ~AppLayer();
 
+    virtual void OnEvent(Core::Event& event) override;
+
     virtual void OnUpdate(float deltaTime) override;
     virtual void OnRender() override;
-
-    void OnKeyEventHandler(const Core::Event& event);
-    void OnMouseButtonEventHandler(const Core::Event& event);
+private:
+    bool OnKeyPressed(const Core::KeyPressedEvent& event);
+    bool OnKeyRelease(const Core::KeyReleasedEvent& event);
+    bool OnMouseButtonPressed(const Core::MouseButtonPressedEvent& event);
+    bool OnMouseMoved(const Core::MouseMovedEvent& event);
 private:
     std::shared_ptr<Renderer::Shader> m_ChunkShader;
     std::shared_ptr<Renderer::TextureAtlas> m_TextureAtlas;

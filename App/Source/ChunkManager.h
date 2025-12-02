@@ -12,6 +12,7 @@
 #include <queue>
 #include <thread>
 #include <memory>
+#include <unordered_set>
 #include <condition_variable>
 
 struct ivec2_hash {
@@ -22,6 +23,12 @@ struct ivec2_hash {
 
         uint64_t hash = x * 73856093ull ^y * 73856093ull;
         return std::hash<uint64_t>()(hash);
+    }
+};
+
+struct ivec2_eq {
+    bool operator()(const glm::ivec2& a, const glm::ivec2& b) const noexcept {
+        return a.x == b.x && a.y == b.y;
     }
 };
 
@@ -43,7 +50,7 @@ enum ChunkJobType {
 
 struct ChunkJob {
     ChunkJobType Type;
-    glm::ivec2 Chunk;
+    std::shared_ptr<Chunk> Chunk;
 };
 
 class ChunkManager {
@@ -53,10 +60,10 @@ public:
 
     void AddChunkJob(const ChunkJob& job);
 
-    void CreateChunk(glm::ivec2 position);
+    std::shared_ptr<Chunk> CreateChunk(glm::ivec2 position);
     void DestroyChunk(glm::ivec2 position);
 
-    bool ChunkExists(glm::ivec2 position) const;
+    bool ChunkExists(glm::ivec2 position);
 
     std::shared_ptr<Chunk> GetChunk(glm::ivec2 position);
 
@@ -72,12 +79,12 @@ private:
     std::shared_ptr<Renderer::Shader> m_ChunkShader;
 
     ChunkMap m_Chunks;
+    std::mutex m_ChunksMutex;
 private:
     bool m_ChunkJobsWorkerRunning = true;
     
     std::thread m_ChunkJobsWorker;
     std::queue<ChunkJob> m_ChunkJobs;
-
     std::mutex m_ChunkJobsMutex;
     std::condition_variable m_ChunkJobsSignal;
 };

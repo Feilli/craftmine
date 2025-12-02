@@ -176,8 +176,7 @@ void Chunk::BuildMesh() {
                 if(type == BlockType::AIR)
                     continue;
 
-                glm::vec3 position = glm::vec3(x, y, z) + m_Position;
-
+                glm::vec3 position = glm::vec3(x, y, z);
                 BlockMesh blockMesh = CreateBlockMesh(position, type);
 
                 if(blockMesh.Visible) {
@@ -199,7 +198,7 @@ void Chunk::BuildMesh() {
                         m_OpaqueMeshConfig.IndexOffset += blockMesh.IndexOffset;
                     }
                     
-                    BlockVisible.push_back(position);
+                    BlockVisible.push_back(m_Position + position);
                 }
             }
         }
@@ -230,7 +229,7 @@ void Chunk::RenderOpaqueMesh(const Camera& camera, const SkyBox& skybox) {
         // bind uniforms
         m_Shader->SetMat4("u_Projection", camera.GetProjectionMatrix());
         m_Shader->SetMat4("u_View", camera.GetViewMatrix());
-        m_Shader->SetMat4("u_Model", glm::mat4(1.0f));
+        m_Shader->SetMat4("u_Model", glm::translate(glm::mat4(1.0f), m_Position));
 
         // bind lighting uniforms
         m_Shader->SetVec3("u_SunDirection", skybox.GetSunDirection());
@@ -261,7 +260,7 @@ void Chunk::RenderTranslucentMesh(const Camera& camera, const SkyBox& skybox) {
         // bind uniforms
         m_Shader->SetMat4("u_Projection", camera.GetProjectionMatrix());
         m_Shader->SetMat4("u_View", camera.GetViewMatrix());
-        m_Shader->SetMat4("u_Model", glm::mat4(1.0f));
+        m_Shader->SetMat4("u_Model", glm::translate(glm::mat4(1.0f), m_Position));
 
         // bind lighting uniforms
         m_Shader->SetVec3("u_SunDirection", skybox.GetSunDirection());
@@ -283,6 +282,17 @@ Intersects::AABB Chunk::GetBoundingBox() {
     return m_BoundingBox;
 }
 
+Block Chunk::GetBlock(const glm::vec3& position) {
+    Block block;
+
+    block.Type = GetBlockType(position);
+    block.ChunkPosition = position;
+    block.Position = m_Position + position;
+    block.Chunk = m_Key;
+
+    return block;
+}
+
 glm::vec3 Chunk::GetPosition() {
     return m_Position;
 }
@@ -294,6 +304,12 @@ void Chunk::SetPosition(const glm::vec3& position) {
     // update bound box
     m_BoundingBox.MinBound = glm::vec3(m_Position);
     m_BoundingBox.MaxBound = { m_Position.x + Chunk::s_ChunkSize, m_Position.y + Chunk::s_ChunkSize * Chunk::s_ChunkSize, m_Position.z + Chunk::s_ChunkSize };
+}
+
+bool Chunk::BlockInside(const glm::vec3& position) {
+    return (position.x >= 0 && position.x < m_BlockTypes.size() &&
+        position.y >= 0 && position.y < m_BlockTypes[0].size() &&
+        position.z >= 0 && position.z < m_BlockTypes[0][0].size());
 }
 
 BlockType Chunk::GetBlockType(const glm::vec3& position) {
@@ -322,11 +338,17 @@ ChunkState Chunk::GetState() {
 
 void Chunk::PlaceTree(const glm::vec3& position) {
     for(const auto& treeBlock : s_Tree) {
-        Block block = m_ChunkManager->GetBlock(m_Position + position + treeBlock.Position);
-        
-        block.Type = treeBlock.Type;
+        glm::vec3 treeBlockPosition = position + treeBlock.Position;
 
-        m_ChunkManager->CreateBlock(block);
+        if(BlockInside(treeBlockPosition)) {
+            SetBlockType(treeBlockPosition, treeBlock.Type);
+        } else {
+            Block block = m_ChunkManager->GetBlock(m_Position + treeBlockPosition);
+            
+            block.Type = treeBlock.Type;
+
+            m_ChunkManager->CreateBlock(block);
+        }
     }
 }
 
@@ -348,7 +370,14 @@ uint8_t Chunk::CreateVertexAO(const glm::vec3& position, const Direction& direct
 
     for(size_t i = 0; i < 3; i++) {
         glm::vec3 neighborPosition = position + neighbors[i];
-        Block block = m_ChunkManager->GetBlock(neighborPosition);
+
+        Block block;
+        
+        if(BlockInside(neighborPosition)) {
+            block = GetBlock(neighborPosition);
+        } else {
+            block = m_ChunkManager->GetBlock(m_Position + neighborPosition);
+        }
 
         if(block.Type != BlockType::AIR && block.Type != BlockType::WATER && block.Type != BlockType::LEAVES) {
             solid[i] = true;
@@ -384,7 +413,14 @@ BlockMesh Chunk::CreateBlockMesh(const glm::vec3& position, const BlockType& typ
 
     for(size_t face = 0; face < 6; face++) {
         glm::vec3 n = directions[face];
-        Block neighbor = m_ChunkManager->GetBlock(position + n);
+        
+        Block neighbor;
+
+        if(BlockInside(position + n)) {
+            neighbor = GetBlock(position + n);
+        } else {
+            neighbor = m_ChunkManager->GetBlock(m_Position + position + n);
+        }
 
         if(!FaceVisible(block.Type, neighbor.Type)) {
             continue;

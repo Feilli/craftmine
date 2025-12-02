@@ -2,7 +2,7 @@
 
 #include "Window.h"
 #include "Layer.h"
-#include "event.h"
+#include "Event.h"
 
 #include <vector>
 #include <string>
@@ -11,17 +11,19 @@
 namespace Core {
 
     struct ApplicationParams {
-        std::string Name = "MineCraft";
+        std::string Name = "CraftMine";
         WindowParams WindowParams;
     };
 
     class Application {
     public:
-        Application(const ApplicationParams& params = ApplicationParams());
+        Application(const ApplicationParams& params);
         ~Application();
 
         void Run();
         void Stop();
+
+        void RaiseEvent(Event& event);
 
         template<typename TLayer>
         requires(std::is_base_of_v<Layer, TLayer>)
@@ -29,19 +31,25 @@ namespace Core {
             m_LayerStack.push_back(std::make_unique<TLayer>());
         }
 
-        std::shared_ptr<Window> GetWindow();
-        std::shared_ptr<EventDispatcher> GetEventDispatcher();
+        template<typename TLayer>
+        requires(std::is_base_of_v<Layer, TLayer>)
+        TLayer* GetLayer() {
+            for(const auto& layer : m_LayerStack) {
+                if(auto casted = dynamic_cast<TLayer*>(layer.get())) {
+                    return casted;
+                }
+            }
 
-        glm::vec2 GetCursorPos() const;
+            return nullptr;
+        }
+
+        std::shared_ptr<Window> GetWindow();
+
         glm::vec2 GetFrameBufferSize() const;
         int GetTickCount() const;
 
         static Application& Get();
         static float GetTime();
-
-        static void OnSetKeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
-        static void OnSetMouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
-
     private:
         ApplicationParams m_Params;
         std::shared_ptr<Window> m_Window;
@@ -52,6 +60,7 @@ namespace Core {
 
         std::vector<std::unique_ptr<Layer>> m_LayerStack;
 
+        friend class Layer;
     };
 
 }
