@@ -5,7 +5,7 @@
 
 int main() {
     Core::ApplicationParams appParams;
-    appParams.Name = "MineCraft";
+    appParams.Name = "CraftMine";
     appParams.WindowParams.Width = 1280;
     appParams.WindowParams.Height = 720;
 
