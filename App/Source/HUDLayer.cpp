@@ -7,6 +7,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include <print>
+
 HUDLayer::HUDLayer() :
     m_Font("Fonts/RobotoMono-Regular.ttf") {
     // load crosshair
@@ -21,56 +23,100 @@ HUDLayer::HUDLayer() :
     m_Crosshair.SetShader(crosshairShader);
     m_Crosshair.SetTexture(crosshairTexture);
 
-    m_Crosshair.SetScale(glm::vec3(0.1f, 0.1f, 0.0f));
+    glm::vec2 scale(32.0f, 32.0f);
+    glm::vec2 frameBufferSize = Core::Application::Get().GetFrameBufferSize();
+
+    m_Crosshair.SetScale(glm::vec3(32.0f, 32.0f, 0.0f));
+    m_Crosshair.SetPosition(glm::vec3(frameBufferSize.x / 2, frameBufferSize.y / 2, 0.0f));
 }
 
 HUDLayer::~HUDLayer() {
 }
 
+void HUDLayer::OnEvent(Core::Event& event) {
+    Core::EventDispatcher dispatcher(event);
+
+    dispatcher.Dispatch<Core::PositionUpdatedEvent>([this](Core::PositionUpdatedEvent& e) { return OnPositionUpdatedEvent(e); });
+    dispatcher.Dispatch<Core::TimeUpdatedEvent>([this](Core::TimeUpdatedEvent& e) { return OnTimeUpdatedEvent(e); });
+    dispatcher.Dispatch<Core::ChunksGeneratedEvent>([this](Core::ChunksGeneratedEvent& e) { return OnChunksGeneratedEvent(e); });
+    dispatcher.Dispatch<Core::MouseScrollEvent>([this](Core::MouseScrollEvent& e) { return OnMouseScrollEvent(e); });
+}
+
 void HUDLayer::OnUpdate(float deltaTime) {
     // update debug info
     m_DebugInfo.FPS = Core::Application::Get().GetTickCount();
-}
 
-void HUDLayer::OnRender() {
-    // Compute projection matrix
+    // update projection matrix
     glm::vec2 frameBufferSize = Core::Application::Get().GetFrameBufferSize();
     float aspect = frameBufferSize.x / frameBufferSize.y;
 
-    glm::mat4 projection = glm::ortho(-aspect, aspect, -1.0f, 1.0f, -1.0f, 1.0f);
+    // m_Projection = glm::ortho(-aspect, aspect, -1.0f, 1.0f, -1.0f, 1.0f);
+    m_Projection = glm::ortho(0.0f, frameBufferSize.x, 0.0f, frameBufferSize.y);
+
+    m_Inventory.Update();
+}
+
+void HUDLayer::OnRender() {
+    // Render Inventory
+    m_Inventory.Render(m_Projection);
 
     // Render Crosshair
-    m_Crosshair.Render(projection);
+    m_Crosshair.Render(m_Projection);
     
     // Render Debug Info
-    std::string fps = std::format("FPS: {}", m_DebugInfo.FPS);
-    m_Font.RenderText(projection, fps, glm::vec2(-1.5f - 0.25f, 1.0f - 0.07f));
+    RenderDebugInfo();
+}
 
-    std::string position = std::format("x: {:10f}, y: {:10f}, z: {:10f}", m_DebugInfo.Position.x, m_DebugInfo.Position.y, m_DebugInfo.Position.z);
-    m_Font.RenderText(projection, position, glm::vec2(-1.5f - 0.25f, 1.0f - 0.14f));
+void HUDLayer::RenderDebugInfo() {
+    // Reset new line offset
+    glm::vec2 frameBufferSize = Core::Application::Get().GetFrameBufferSize();
+    m_NextLineOffset = { 10.0f, frameBufferSize.y - 26.0f };
 
-    std::string blockHit = std::format("x: {:10f}, y: {:10f}, z: {:10f}", m_DebugInfo.BlockHit.x, m_DebugInfo.BlockHit.y, m_DebugInfo.BlockHit.z);
-    m_Font.RenderText(projection, blockHit, glm::vec2(-1.5f - 0.25f, 1.0f - 0.21f));
+    // FPS
+    RenderDebugInfoLine(std::format("FPS: {}", m_DebugInfo.FPS));
 
-    // Render current time
-    float realSeconds = (m_DebugInfo.CurrentTime / m_DebugInfo.DayDuration) * 60 * 60 * 24;
+    // Position
+    RenderDebugInfoLine(std::format("x:{:10f}, y:{:10f}, z:{:10f}", m_DebugInfo.Position.x, m_DebugInfo.Position.y, m_DebugInfo.Position.z));
+
+    // Time
+    float realSeconds = (m_DebugInfo.DayTime / m_DebugInfo.DayDuration) * 60 * 60 * 24;
 
     int hours = static_cast<int>(realSeconds) / 60 / 60;
     int minutes = (static_cast<int>(realSeconds) % 3600) / 60;
 
-    std::string time = std::format("Time: {:02}:{:02}", hours, minutes);
-    m_Font.RenderText(projection, time, glm::vec2(-1.5f - 0.25f, 1.0f - 0.28f));
+    RenderDebugInfoLine(std::format("Day Time: {:02}:{:02}", hours, minutes));
+
+    // Chunks
+    RenderDebugInfoLine(std::format("Created {} chunks in {} seconds.", m_DebugInfo.ChunksCreated, m_DebugInfo.ChunksCreatedTime));
 }
 
-void HUDLayer::OnPositionUpdatedEvent(glm::vec3 position) {
-    m_DebugInfo.Position = position;
+void HUDLayer::RenderDebugInfoLine(std::string line) {
+    m_Font.RenderText(m_Projection, line, m_NextLineOffset);
+    m_NextLineOffset -= glm::vec2(0.0f, 20.0f);
 }
 
-void HUDLayer::OnBlockHitUpdatedEvent(glm::vec3 position) {
-    m_DebugInfo.BlockHit = position;
+bool HUDLayer::OnPositionUpdatedEvent(const Core::PositionUpdatedEvent& event) {
+    m_DebugInfo.Position = event.GetPosition();
+
+    return false;
 }
 
-void HUDLayer::OnCurrenTimeUpdatedEvent(float currentTime, float dayDuration) {
-    m_DebugInfo.CurrentTime = currentTime;
-    m_DebugInfo.DayDuration = dayDuration;
+bool HUDLayer::OnTimeUpdatedEvent(const Core::TimeUpdatedEvent& event) {
+    m_DebugInfo.DayTime = event.GetDayTime();
+    m_DebugInfo.DayDuration = event.GetDayDuration();
+
+    return false;
+}
+
+bool HUDLayer::OnChunksGeneratedEvent(const Core::ChunksGeneratedEvent& event) {
+    m_DebugInfo.ChunksCreated = event.GetChunks();
+    m_DebugInfo.ChunksCreatedTime = event.GetTime();
+
+    return false;
+}
+
+bool HUDLayer::OnMouseScrollEvent(const Core::MouseScrollEvent& event) {
+    m_Inventory.SetSelectedItem(event.GetYOffset());
+    
+    return false;
 }

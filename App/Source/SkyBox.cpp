@@ -1,5 +1,6 @@
 #include "SkyBox.h"
 
+#include "Core/AppEvents.h"
 #include "Core/Application.h"
 #include "Core/Renderer/Renderer.h"
 
@@ -94,14 +95,9 @@ void SkyBox::Update(float deltaTime) {
 
     m_SunColor = glm::mix(moonColor, sunColor, -cos(sunAngle) / 2.0f + 0.5f);
 
-    // push event
-    // Core::Event event;
-
-    // event.Type = Core::EventType::TimeUpdated;
-    // event.CurrentTime = m_CurrentTime;
-    // event.DayDuration = m_DayDuration;
-
-    // Core::Application::Get().GetEventDispatcher()->PushEvent(event);
+    // push events
+    Core::TimeUpdatedEvent event(m_CurrentTime, m_DayDuration);
+    Core::Application::Get().RaiseEvent(event);
 }
 
 void SkyBox::Render(const Camera& camera) {

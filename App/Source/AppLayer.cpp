@@ -2,6 +2,7 @@
 
 #include "Intersects.h"
 
+#include "Core/AppEvents.h"
 #include "Core/Application.h"
 
 #include "glm/gtc/matrix_transform.hpp"
@@ -43,6 +44,8 @@ void AppLayer::OnEvent(Core::Event& event) {
     dispatcher.Dispatch<Core::KeyReleasedEvent>([this](Core::KeyReleasedEvent& e) { return OnKeyRelease(e); });
     dispatcher.Dispatch<Core::MouseButtonPressedEvent>([this](Core::MouseButtonPressedEvent& e) { return OnMouseButtonPressed(e); });
     dispatcher.Dispatch<Core::MouseMovedEvent>([this](Core::MouseMovedEvent& e) { return OnMouseMoved(e); });
+
+    dispatcher.Dispatch<Core::SelectedItemUpdatedEvent>([this](Core::SelectedItemUpdatedEvent& e) { return OnSelectedItemUpdated(e); });
 }
 
 void AppLayer::OnUpdate(float deltaTime) {
@@ -71,14 +74,6 @@ void AppLayer::OnUpdate(float deltaTime) {
 
     // update sun 
     m_SkyBox.Update(deltaTime);
-
-    // push events
-    // Core::Event positionUpdatedEvent = { 
-    //     .Type = Core::EventType::PositionUpdated, 
-    //     .Position = m_Camera.GetPosition()  
-    // };
-
-    // Core::Application::Get().GetEventDispatcher()->PushEvent(positionUpdatedEvent);
 }
 
 void AppLayer::OnRender() {
@@ -126,7 +121,7 @@ bool AppLayer::OnMouseButtonPressed(const Core::MouseButtonPressedEvent& event) 
 
                 if(newBlock.Type == BlockType::AIR || newBlock.Type == BlockType::WATER) {
                     // add type selection;
-                    newBlock.Type = BlockType::DIRT;
+                    newBlock.Type = m_SelectedItem;
                     m_ChunkManager->CreateBlock(newBlock);
 
                     std::shared_ptr<Chunk> chunk = m_ChunkManager->GetChunk(newBlock.Chunk);
@@ -178,8 +173,8 @@ bool AppLayer::OnMouseMoved(const Core::MouseMovedEvent& event) {
     float mouseSensitivity = 0.1f;
     glm::vec2 frameBufferSize = Core::Application::Get().GetFrameBufferSize();
 
-    float yaw = m_Camera.GetYaw() - mouseSensitivity * (frameBufferSize.x / 2 - event.GetX());
-    float pitch = m_Camera.GetPitch() + mouseSensitivity * (frameBufferSize.y / 2 - event.GetY());
+    float yaw = m_Camera.GetYaw() - mouseSensitivity * (frameBufferSize.x / 2 - static_cast<float>(event.GetX()));
+    float pitch = m_Camera.GetPitch() + mouseSensitivity * (frameBufferSize.y / 2 - static_cast<float>(event.GetY()));
 
     // clamp the pitch
     if(pitch > 89.0f) pitch = 89.0f;
@@ -187,6 +182,12 @@ bool AppLayer::OnMouseMoved(const Core::MouseMovedEvent& event) {
 
     m_Camera.SetYaw(yaw);
     m_Camera.SetPitch(pitch);
+
+    return false;
+}
+
+bool AppLayer::OnSelectedItemUpdated(const Core::SelectedItemUpdatedEvent& event) {
+    m_SelectedItem = static_cast<BlockType>(event.GetSelectedItem());
 
     return false;
 }
@@ -219,7 +220,6 @@ void AppLayer::SortChunks() {
 void AppLayer::UpdateChunks() {
     // check timing
     float startTime = Core::Application::GetTime();
-    float endTime = 0;
 
     // scan which chunks we need to remove/add based on view distance
     glm::ivec2 cameraChunk = WorldToChunkCoordinate(m_Camera.GetPosition());
@@ -289,10 +289,11 @@ void AppLayer::UpdateChunks() {
         }
     }
 
-    endTime = Core::Application::GetTime();
-
     if(chunksCreated.size() > 0) {
-        std::println("Generated {} chunks in {} seconds.", chunksCreated.size(), (endTime - startTime));
+        float endTime = Core::Application::GetTime();
+
+        Core::ChunksGeneratedEvent event(static_cast<int>(chunksCreated.size()), (endTime - startTime));
+        Core::Application::Get().RaiseEvent(event);
     }
 
     // // build meshes for the new chunks (excluding neighbors built on the fly)
@@ -403,13 +404,6 @@ void AppLayer::UpdateBlockOutline() {
         m_BlockOutline.BoundingBox.SetBoundingBox(box);
         m_BlockOutline.BoundingBox.SetPosition(m_BlockOutline.Position);
         m_BlockOutline.BoundingBox.Update();
-
-        // Core::Event blockHitUpdatedEvent = { 
-        //     .Type = Core::EventType::BlockHitUpdated, 
-        //     .Position = m_BlockOutline.Position
-        // };
-
-        // Core::Application::Get().GetEventDispatcher()->PushEvent(blockHitUpdatedEvent);
     }
 }
 

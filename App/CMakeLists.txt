@@ -20,6 +20,8 @@ set(SOURCES
     Source/Perlin.cpp
     Source/SkyBox.h
     Source/SkyBox.cpp
+    Source/Inventory.h
+    Source/Inventory.cpp
 )
 
 add_executable(App)

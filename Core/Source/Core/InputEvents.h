@@ -26,7 +26,7 @@ namespace Core {
         inline bool IsRepeat() const { return m_IsRepeat; }
 
         std::string ToString() const override {
-            return std::format("KeyPressedEvent, {} (repeat={})", m_KeyCode, m_IsRepeat);
+            return std::format("KeyPressedEvent: {} (repeat={})", m_KeyCode, m_IsRepeat);
         }
 
         EVENT_CLASS_TYPE(KeyPressed)
@@ -40,7 +40,7 @@ namespace Core {
             : KeyEvent(keycode) {}
 
         std::string ToString() const override {
-            return std::format("KeyReleasedEvent, {}", m_KeyCode);
+            return std::format("KeyReleasedEvent: {}", m_KeyCode);
         }
 
         EVENT_CLASS_TYPE(KeyReleased)

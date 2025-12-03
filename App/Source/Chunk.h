@@ -24,7 +24,10 @@ enum BlockType {
     WATER,
     SAND,
     WOOD,
-    LEAVES
+    LEAVES,
+    COBBLESTONE,
+    PLANKS,
+    GLASS
 };
 
 enum Direction {
@@ -54,7 +57,7 @@ struct Face {
     glm::vec3 Vertices[4];
 };
 
-static const Face s_Faces[6] = {
+inline constexpr Face s_Faces[6] = {
     // font
     { 
         Direction::FRONT,
@@ -128,7 +131,7 @@ struct Decoration {
     BlockType Type;
 };
 
-static const Decoration s_Tree[22] = {
+inline constexpr Decoration s_Tree[22] = {
     { {  0,  5,  0 }, BlockType::LEAVES },
 
     { { -1,  4,  0 }, BlockType::LEAVES },

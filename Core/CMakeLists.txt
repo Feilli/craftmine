@@ -11,6 +11,7 @@ set(SOURCES
     Source/Core/Event.h
     Source/Core/WindowEvents.h
     Source/Core/InputEvents.h
+    Source/Core/AppEvents.h
     Source/Core/Renderer/Texture.h
     Source/Core/Renderer/Texture.cpp
     Source/Core/Renderer/TextureAtlas.h

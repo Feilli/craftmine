@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Core/Layer.h"
+#include "Core/AppEvents.h"
 #include "Core/InputEvents.h"
 #include "Core/Renderer/TextureAtlas.h"
 #include "Core/Renderer/Shader.h"
@@ -29,6 +30,7 @@ private:
     bool OnKeyRelease(const Core::KeyReleasedEvent& event);
     bool OnMouseButtonPressed(const Core::MouseButtonPressedEvent& event);
     bool OnMouseMoved(const Core::MouseMovedEvent& event);
+    bool OnSelectedItemUpdated(const Core::SelectedItemUpdatedEvent& event);
 private:
     std::shared_ptr<Renderer::Shader> m_ChunkShader;
     std::shared_ptr<Renderer::TextureAtlas> m_TextureAtlas;
@@ -68,4 +70,6 @@ private:
     SkyBox m_SkyBox;
     
     Camera m_Camera;
+
+    BlockType m_SelectedItem;
 };

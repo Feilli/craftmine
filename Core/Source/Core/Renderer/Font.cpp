@@ -38,7 +38,17 @@ namespace Renderer {
             if(FT_Load_Char(face, c, FT_LOAD_RENDER))
                 continue;
 
+            // space
             if(face->glyph->bitmap.width == 0 || face->glyph->bitmap.rows == 0) {
+                Character character = {
+                    0,
+                    glm::ivec2(0, 0),
+                    glm::ivec2(face->glyph->bitmap_left, face->glyph->bitmap_top),
+                    static_cast<uint32_t>(face->glyph->advance.x)
+                };
+
+                m_Characters.insert(std::pair<char, Character>(c, character));
+
                 continue;    
             }
 
@@ -116,7 +126,7 @@ namespace Renderer {
         for(const char& c: text) {
             Character ch = m_Characters[c];
 
-            float scale = 0.003f;
+            float scale = 1.0f;
 
             glm::vec2 pos = glm::vec2(
                 position.x + ch.Bearing.x * scale, 

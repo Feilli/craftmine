@@ -10,7 +10,7 @@ namespace Core {
         WindowClose, WindowResize,
         KeyPressed, KeyReleased,
         MouseButtonPressed, MouseButtonReleased, MouseMoved, MouseScrolled,
-        PositionUpdated, BlockHitUpdated, TimeUpdated
+        PositionUpdated, TimeUpdated, ChunksGenerated, SelectedItemUpdated
     };
 
 #define EVENT_CLASS_TYPE(type) static EventType GetStaticType() { return EventType::type; }\

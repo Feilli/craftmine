@@ -26,6 +26,12 @@ namespace Renderer {
         m_Texture = textureHandle;
     }
 
+    void Quad::SetVertices(Vertex vertices[]) {
+        for(size_t i = 0; i < 4; i++) {
+            m_Vertices[i] = vertices[i];
+        }
+    }
+
     void Quad::SetPosition(glm::vec3 position) {
         m_Transform.Position = position;
     }
@@ -35,25 +41,13 @@ namespace Renderer {
     }
 
     void Quad::InitGeometry() {
-        Vertex vertices[] = {
-            { { -0.5f, -0.5f, 0.0f }, { 0.0f, 0.0f } },
-            { {  0.5f, -0.5f, 0.0f }, { 1.0f, 0.0f } },
-            { {  0.5f,  0.5f, 0.0f }, { 1.0f, 1.0f } },
-            { { -0.5f,  0.5f, 0.0f }, { 0.0f, 1.0f } },
-        };
-
-        unsigned int indices[] = {
-            0, 1, 2,
-            2, 3, 0
-        };
-
         // create arrays and buffers
         glCreateVertexArrays(1, &m_VertexArray);
         glCreateBuffers(1, &m_VertexBuffer);
         glCreateBuffers(1, &m_ElementBuffer);
 
-        glNamedBufferData(m_VertexBuffer, sizeof(vertices), vertices, GL_STATIC_DRAW);
-        glNamedBufferData(m_ElementBuffer, sizeof(indices), indices, GL_STATIC_DRAW);
+        glNamedBufferData(m_VertexBuffer, sizeof(m_Vertices), m_Vertices, GL_STATIC_DRAW);
+        glNamedBufferData(m_ElementBuffer, sizeof(m_Indices), m_Indices, GL_STATIC_DRAW);
 
         // bind VBO and VAO to binding index 0
         glVertexArrayVertexBuffer(m_VertexArray, 0, m_VertexBuffer, 0, sizeof(Vertex));
@@ -76,11 +70,10 @@ namespace Renderer {
         // render quad
         glUseProgram(m_Shader);
 
-        // scale quad
         glm::mat4 model = glm::mat4(1.0f);
         
-        model = glm::scale(model, m_Transform.Scale);
         model = glm::translate(model, m_Transform.Position);
+        model = glm::scale(model, m_Transform.Scale);
 
         GLuint modelLocation = glGetUniformLocation(m_Shader, "model");
         GLuint projectionLocation = glGetUniformLocation(m_Shader, "projection");

@@ -53,6 +53,15 @@ Chunk::Chunk(ChunkManager* chunkManager,
     // leaves
     m_BlockTypesUVsMap[Direction::ALL][BlockType::LEAVES] = { 6, 1 };
 
+    // cobblestone
+    m_BlockTypesUVsMap[Direction::ALL][BlockType::COBBLESTONE] = { 0, 1 };
+
+    // planks
+    m_BlockTypesUVsMap[Direction::ALL][BlockType::PLANKS] = { 4, 0 };
+
+    // glass
+    m_BlockTypesUVsMap[Direction::ALL][BlockType::GLASS] = { 1, 3 };
+
     // ambient occlusion
     // FRONT (+Z)
     m_VertexNeighbors[3][Direction::FRONT] = { { {  0, +1,  0 }, { -1,  0,  0 }, { -1, +1,  0 } } }; // v0
@@ -180,7 +189,7 @@ void Chunk::BuildMesh() {
                 BlockMesh blockMesh = CreateBlockMesh(position, type);
 
                 if(blockMesh.Visible) {
-                    if(blockMesh.Type == BlockType::WATER || blockMesh.Type == BlockType::LEAVES) {
+                    if(blockMesh.Type == BlockType::WATER || blockMesh.Type == BlockType::LEAVES || blockMesh.Type == BlockType::GLASS) {
                         m_TranslucentMeshConfig.Vertices.insert(m_TranslucentMeshConfig.Vertices.end(), blockMesh.Vertices.begin(), blockMesh.Vertices.end());
 
                         for(size_t i = 0; i < blockMesh.Indices.size(); i ++) {
@@ -361,7 +370,7 @@ bool Chunk::FaceVisible(BlockType current, BlockType neighbor) {
         return neighbor != BlockType::WATER && neighbor != BlockType::VOID;
     }
 
-    return neighbor == BlockType::AIR || neighbor == BlockType::WATER || neighbor == BlockType::LEAVES;
+    return neighbor == BlockType::AIR || neighbor == BlockType::WATER || neighbor == BlockType::LEAVES || neighbor == BlockType::GLASS;
 }
 
 uint8_t Chunk::CreateVertexAO(const glm::vec3& position, const Direction& direction, const size_t& vertex) {

@@ -21,6 +21,8 @@ namespace Renderer {
         void SetShader(uint32_t shaderHandle);
         void SetTexture(uint32_t textureHandle);
 
+        void SetVertices(Vertex vertices[4]);
+
         void SetPosition(glm::vec3 position);
         void SetScale(glm::vec3 scale);
 
@@ -36,6 +38,18 @@ namespace Renderer {
         uint32_t m_Texture = 0;
 
         Transform m_Transform;
+
+        Vertex m_Vertices[4] = {
+            { { -0.5f, -0.5f, 0.0f }, { 0.0f, 1.0f } },
+            { {  0.5f, -0.5f, 0.0f }, { 1.0f, 1.0f } },
+            { {  0.5f,  0.5f, 0.0f }, { 1.0f, 0.0f } },
+            { { -0.5f,  0.5f, 0.0f }, { 0.0f, 0.0f } }
+        };
+
+        uint32_t m_Indices[6] = {
+            0, 1, 2,
+            2, 3, 0
+        };
     };
 
 }

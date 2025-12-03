@@ -1,9 +1,9 @@
 #include "Camera.h"
 
+#include "Core/AppEvents.h"
 #include "Core/Application.h"
 
 #include <GLFW/glfw3.h>
-
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -33,6 +33,10 @@ void Camera::Update(float deltaTime) {
     // update matrices
     m_ProjectionMatrix = glm::perspective(glm::radians(m_FieldOfView), frameBufferSize.x / frameBufferSize.y, 0.1f, 1000.0f);
     m_ViewMatrix = glm::lookAt(m_Position, m_Position + m_Front, m_Up);
+
+    // push events
+    Core::PositionUpdatedEvent event(GetPosition());
+    Core::Application::Get().RaiseEvent(event);
 }
 
 void Camera::UpdatePosition(float deltaTime) {
