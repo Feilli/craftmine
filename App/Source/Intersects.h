@@ -3,6 +3,7 @@
 #include <glm/glm.hpp>
 
 #include <numeric>
+#include <algorithm>
 
 namespace Intersects {
 

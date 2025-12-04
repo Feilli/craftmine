@@ -2,6 +2,9 @@
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
+#include <vector>
+#include <filesystem>
 
 #include <glad/gl.h>
 #include <glm/glm.hpp>

@@ -12,6 +12,7 @@
 #include <print>
 #include <numeric>
 #include <ranges>
+#include <algorithm>
 
 AppLayer::AppLayer() {
     // create chunk manager

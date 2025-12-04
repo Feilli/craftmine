@@ -1,6 +1,7 @@
 #include "Perlin.h"
 
 #include <numeric>
+#include <algorithm>
 
 Perlin::Perlin(unsigned int seed) {
     m_P.resize(256);
