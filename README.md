@@ -8,11 +8,15 @@ A small Minecraft-like demo written in C++ using OpenGL. This demo was inspired 
 
 This project uses CMake to generate project files. Use the following commands to create a build directory and generate project files for your specific build system. This will also pull all the necessary build dependencies (GLFW, GLAD, GLM, FreeType).
 
+Before cloning the project, make sure that your system supports *OpenGL 4.6*.
+
 ```
 mkdir build
 cd build
 cmake ..
 ```
+
+NOTE: To build GLAD you might need to install Python Jinja2 package.
 
 ## About This Demo
 
